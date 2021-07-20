@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="https://www.layuicdn.com/layui/css/layui.css"/>
+    <title>注册量统计</title>
+</head>
+<body>
+<div>
+    <label>用户名:<input id="uname"></label>
+    <label>用户id:<input id="uid"></label>
+    <button onclick="cx()">查询</button>
+    <span id="tj"></span>
+    <button onclick="tj()">统计</button>
+</div>
+<div class="sta"></div>
+<table id="demo" lay-filter="test"></table>
+</body>
+<script src="https://www.layuicdn.com/layui/layui.js"></script>
+<script>
+    function render(url) {
+        layui.use('table', function () {
+            var table = layui.table;
+            //第一个实例
+            table.render({
+                elem: '#demo'
+                , height: 500
+                , url: url //数据接口
+                , page: true //开启分页
+                , cols: [[ //表头
+                    {field: 'did', title: 'ID', width: 130}
+                    , {field: 'time', title: '注册时间', width: 180}
+                ]]
+            });
+
+        });
+    }
+
+    function cx() {
+        let uid = document.getElementById('uid').value;
+        let uname = document.getElementById('uname').value;
+        render('/com/reg_data?uid=' + uid + "&uname=" + uname);
+    }
+
+    function tj() {
+        let uid = document.getElementById('uid').value;
+        let uname = document.getElementById('uname').value;
+        layui.$.post('/com/reg_tj', {uid, uname}, (data) => {
+            document.getElementById('tj').innerText = data.msg;
+        });
+    }
+</script>
+</html>
