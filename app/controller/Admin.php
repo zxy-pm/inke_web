@@ -41,7 +41,8 @@ class Admin extends BaseController
 
     public function t()
     {
-        return TL::create($this->user)->t();
+        dump($this->request->header());
+        return 'aaa';
     }
 
     public function ad_in()
