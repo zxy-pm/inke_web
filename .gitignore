@@ -2,11 +2,8 @@
 
 /.vscode
 
-/vendor
-
 *.log
 
-.env
 *.txt
 *.md
 /runtime
