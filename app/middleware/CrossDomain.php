@@ -11,6 +11,7 @@ class CrossDomain
 {
     public function handle($request, Closure $next, ?array $header = [])
     {
+
         header('Access-Control-Allow-Origin: http://127.0.0.1:8080', true);
         header('Access-Control-Allow-Credentials: true');
         header('Access-Control-Max-Age: 1800');

@@ -6,6 +6,7 @@ namespace app\controller\admin;
 
 use app\model\Change;
 use app\model\Order;
+use app\model\Set;
 use app\model\User;
 use app\util\C;
 use app\util\D;
@@ -130,10 +131,36 @@ class UserL extends BaseL
         } else if ($k == 'pwd') {
             //修改密码,要加盐再保存
             $user->pwd = md5($user->name . $v . C::salt);
+        } else if ($k == 'qkey') {
+            //修改密码,要加盐再保存
+            $user->qkey = md5($user->name . $user->id . C::salt . time());
         } else {
             $user[$k] = $v;
         }
         $user->save();
         return Js::suc(null, '修改成功');
+    }
+
+    //用户自己的信息(通道id,通道key)
+    public function user_ch($id, $key, $moneys, $host)
+    {
+        //不是指定的参数直接返回错误
+        $this->user->channel_id = $id;
+        $this->user->channel_key = $key;
+        $this->user->moneys = $moneys;
+        $this->user->host = $host;
+        $this->user->save();
+        //正常修改完成,返回成功
+        return Js::suc();
+    }
+
+    public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link)
+    {
+        if ($this->user->type != 1) return Js::err('失败');
+        Set::put(C::key_kl, $kl);
+        Set::put(C::key_kl_fee, $kl_fee);
+        Set::put(C::key_kl_fee1, $kl_fee1);
+        Set::put(C::key_kl_link, $kl_link);
+        return Js::suc();
     }
 }

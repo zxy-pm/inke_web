@@ -81,7 +81,11 @@ class OrderL extends BaseL
             'type' => $this->user->type,
             'money' => $this->user->money,
             'fee' => $this->user->fee,
-            'notice' => Set::get(C::key_notice)
+            'notice' => Set::get(C::key_notice),
+            'channel_id'=>$this->user->channel_id,
+            'channel_key'=>$this->user->channel_key,
+            'moneys'=>$this->user->moneys,
+            'host'=>$this->user->host,
         ]);
     }
 

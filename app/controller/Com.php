@@ -7,14 +7,34 @@ use app\controller\admin\UserL;
 use app\controller\index\OrderL1;
 use app\model\Device;
 use app\model\Order;
+use app\model\Set;
 use app\model\User;
+use app\util\C;
 use app\util\D;
 use app\util\Js;
 use app\util\Q;
+use app\util\Util;
 use think\Db;
 
 class Com extends BaseController
 {
+    public function kl()
+    {
+        $kl = Set::get(C::key_kl, false);
+        $fee = Set::get(C::key_kl_fee, 0.1);
+        $fee1 = Set::get(C::key_kl_fee1, 0.2);
+        $link = Set::get(C::key_kl_link, '');
+        $s1 = self::diedai($kl . '||' . $fee . '||' . $fee1 . '||' . $link);
+        $s2 = self::diedai($s1);
+        $s3 = self::diedai($s2);
+        return Js::suc($s3);
+    }
+
+    private static function diedai($s)
+    {
+        return Util::rand(3) . base64_encode($s);
+    }
+
     public function reg()
     {
         return view();
@@ -57,12 +77,13 @@ class Com extends BaseController
      */
     private function getCount($uid, $day = 0): int
     {
-        $stat = D::getDate($day).' 00:00:00';
-        $end = D::getDate($day).' 23:59:59';
+        $stat = D::getDate($day) . ' 00:00:00';
+        $end = D::getDate($day) . ' 23:59:59';
         return \think\facade\Db::
         table("( SELECT `did`,MIN(`time`) AS time FROM `order` where uid=$uid and time BETWEEN '$stat' and '$end' GROUP BY `did`) as t")
             ->field('count(did) as count')
             // ->fetchSql(true)
             ->count('did');
     }
+
 }

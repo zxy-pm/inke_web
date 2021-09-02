@@ -16,6 +16,10 @@ class SetL extends BaseL
     {
         return Js::suc([
             'notice' => Set::get(C::key_notice),
+            'kl' => Set::get(C::key_kl),
+            'kl_fee' => Set::get(C::key_kl_fee),
+            'kl_fee1' => Set::get(C::key_kl_fee1),
+            'kl_link' => Set::get(C::key_kl_link),
         ]);
     }
 

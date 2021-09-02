@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>正在发起,请等待...</title>
+</head>
+<body>
+<form method="post" action="{$url}" id="form">
+    {foreach $param as $k=>$v}
+    <input id="{$k}" name="{$k}" value="{$v}" hidden>
+    {/foreach}
+</form>
+<script>
+    document.getElementById('form').submit();
+</script>
+</body>
+</html>
