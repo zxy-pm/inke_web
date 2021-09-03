@@ -17,7 +17,7 @@ class OrderL extends BaseL
 {
 
 
-    public function orders($page, $channel_id)
+    public function orders_1($page, $channel_id)
     {
         $data = Q::select('order,channel', 'order.cid=channel.id and order.uid=' . $this->user->id,
             'order.*,channel.name,channel.id as ccid', $page, C::$page_num, 'id desc')->toArray();
@@ -26,16 +26,19 @@ class OrderL extends BaseL
 
     }
 
+    public function orders($page)
+    {
+        $data = Order::where('uid', $this->user->id)->order('time', 'desc')->page($page, C::$page_num)->select();
+        $count = Order::where('uid', $this->user->id)->count();
+        return Js::suc($data, 'ok', 0, $count);
+
+    }
+
     public function all_orders($page)
     {
         if ($this->user->type == 0) return Js::err('没有权限访问');
-        $data = Q::select('order,channel', 'order.cid=channel.id',
-            'order.*,channel.name,channel.id as ccid',
-            $page,
-            C::$page_num,
-            'order.id desc'
-        )->toArray();
-        $count = Q::count('order,channel', 'order.cid=channel.id');
+        $data = Order::order('time', 'desc')->page($page, C::$page_num)->select();
+        $count = Order::count();
         return Js::suc($data, 'ok', 0, $count);
 
     }
@@ -82,10 +85,10 @@ class OrderL extends BaseL
             'money' => $this->user->money,
             'fee' => $this->user->fee,
             'notice' => Set::get(C::key_notice),
-            'channel_id'=>$this->user->channel_id,
-            'channel_key'=>$this->user->channel_key,
-            'moneys'=>$this->user->moneys,
-            'host'=>$this->user->host,
+            'channel_id' => $this->user->channel_id,
+            'channel_key' => $this->user->channel_key,
+            'moneys' => $this->user->moneys,
+            'host' => $this->user->host,
         ]);
     }
 

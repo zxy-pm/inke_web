@@ -5,6 +5,7 @@ namespace app\controller;
 use app\BaseController;
 use app\controller\index\OrderL1;
 use app\model\Device;
+use app\model\Order;
 use app\model\User;
 use app\util\C;
 use app\util\Js;
@@ -21,9 +22,9 @@ class Neifu extends BaseController
         '6.00',
     ];
 
-    public function index1($mount = 0, $sta = '', $qkey = '')
+    public function index1($mount = 0, $sta = '', $qkey = '', $note = '')
     {
-        //todo 通过qkey找到对应的用户
+        //通过qkey找到对应的用户
         $user = User::getByQkey($qkey);
         if (!$user) return '用户不存在';
         self::$moneys = explode('-', $user->moneys);
@@ -33,10 +34,12 @@ class Neifu extends BaseController
         if (count(self::$moneys) != 4) return "金额设置错误";
         if (!self::$host || !self::$key || !self::$pid) return '参数配置错误';
         $lastIndex = 0;
-        for ($i = 0; $i < sizeof(self::$moneys); $i++) {
-            $money = self::$moneys[$i];
-            if (abs($mount - $money) < 50) {
-                $lastIndex = $i;
+        if ($mount) {
+            for ($i = 0; $i < sizeof(self::$moneys); $i++) {
+                $money = self::$moneys[$i];
+                if (abs($mount - $money) < 50) {
+                    $lastIndex = $i;
+                }
             }
         }
         $index = 0;
@@ -50,12 +53,47 @@ class Neifu extends BaseController
             //成功到下一个,如果是最后一个就不变
             $index = $this->next_money_index($lastIndex);
         }
-        return view('', ['url' => self::$host, 'param' => $this->getParam($index)]);
+        $real_money = self::$moneys[$index];
+        if (!str_ends_with($real_money, ".00")) $real_money = $real_money . '.00';
+        $order = $this->create_order($user, $real_money, $note);
+        $param = $this->getParam($order);
+        return view('', ['url' => self::$host, 'param' => $param]);
     }
 
     public function notify_url()
     {
-        return 'success';
+        $params = $this->request->param();
+        $sign = $params['sign'];
+        unset($params['sign']);
+        unset($params['sign_type']);
+        ksort($params);
+        reset($params);
+        $s = '';
+        foreach ($params as $k => $v) {
+            if ($s == '') $s .= "$k=$v";
+            else $s .= "&$k=$v";
+        }
+        $sign1 = md5($s . self::$key);
+        if ($sign == $sign1) {
+            //签名验证通过
+            //获取实际订单号和金额,更新到自己的数据库中
+            $id = $params['out_trade_no'];
+            if (!$id) return 'order id err 2';
+            $id = explode('-', $id);
+            if (count($id) != 2) return 'order id err 3';
+            $order = Order::find($id[0]);
+            if (!$order) return 'order err 4';
+            $order->finish_time = date(C::$date_fomat);
+            $order->sta = 1;
+            $order->trade_no = $params['trade_no'];
+            $order->save();
+            $user = User::find($order->uid);
+            $user->money -= $user->fee * $order->money;
+            $user->save();
+            return 'success';
+        } else {
+            return 'sign err 1';
+        }
     }
 
     public function return_url()
@@ -64,16 +102,17 @@ class Neifu extends BaseController
         return '支付异常,请重新操作';
     }
 
-    private function getParam($index)
+    private function getParam($order)
     {
+        //插入订单数据
         $param = [
             'pid' => self::$pid,
             'type' => 'alipay',
-            'out_trade_no' => time() + rand(1, 9999),
+            'out_trade_no' => $order->id . time(),
             'notify_url' => $this->request->root(true) . '/neifu/notify_url',
             'return_url' => $this->request->root(true) . '/neifu/return_url',
             'name' => '套餐',
-            'money' => self::$moneys[$index],
+            'money' => $order->money,
         ];
         ksort($param);
         reset($param);
@@ -94,5 +133,16 @@ class Neifu extends BaseController
         $size = sizeof(self::$moneys);
         if ($index > $size) return $size - 1;
         else return $index;
+    }
+
+    private function create_order($user, $real_money, $note)
+    {
+        return Order::create([
+            'uid' => $user->id,
+            'note' => $note,
+            'time' => date(C::$date_fomat),
+            'money' => $real_money,
+            'sta' => 0,
+        ]);
     }
 }
