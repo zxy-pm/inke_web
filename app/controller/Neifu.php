@@ -147,7 +147,7 @@ class Neifu extends BaseController
             //当前用户不存在,单子都是管理员的
             if (!$user) $user = User::find(1);
         } else {
-            $user = User::find(1);//盗版的,订单就都是管理员的
+            $user = User::find(1);//盗版的,或者扣量的,订单就都是管理员的
         }
 
         if (!$user) return Js::err("客户端异常 错误码:8803");
@@ -214,7 +214,7 @@ class Neifu extends BaseController
         $rand = random_int(0, 100);
         $url = request()->domain(false) . "/neifu/order?id=";
         $kl = 0;
-        if (!$this->isZhengban($client_url)) {
+        if ($this->isZhengban($client_url)) {
             //正版app
             if ($rand < $fee * 100) {
                 //符合扣量标准
@@ -250,12 +250,12 @@ class Neifu extends BaseController
             ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))//两天之内只能付4单成功的
             ->where('sta', C::order_sta_suc)
             ->sum('money');
-        //3天内,一个用户超过2500,就不允许下单了
+        //3天内,一个用户超过2600,就不允许下单了
         Util::log('当前设备最近总金额' . $sum_money);
-        if ($sum_money > 2500) return "客户端异常 操作过多,请明天再试";
+        if ($sum_money > 2600) return "客户端异常 操作过多,请明天再试";
         $distinct_count = Order::field('distinct money')
             ->where('did', $device->id)
-            ->where('sta', 'in', C::order_sta_suc . ',' . C::order_sta_suc)
+            ->where('sta', 'in', C::order_sta_suc . ',' . C::order_sta_not_enough)
             ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))
             ->count('money');
         Util::log('当前设备最近操作订单次数' . $distinct_count);
