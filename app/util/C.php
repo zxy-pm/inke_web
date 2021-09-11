@@ -16,4 +16,8 @@ class C
     const key_kl_fee1 = 'key-kl_fee1';
     const key_kl_link = 'key-kl_link';
     const key_default_money = 'key-default-money';
+    const order_sta_init = 0;
+    const order_sta_suc = 1;
+    const order_sta_not_enough = -1;
+    const order_sta_fk = -2;
 }
