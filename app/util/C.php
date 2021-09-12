@@ -19,5 +19,5 @@ class C
     const order_sta_init = 0;
     const order_sta_suc = 1;
     const order_sta_not_enough = -1;
-    const order_sta_fk = -2;
+    const order_sta_fk = -2;//分控
 }
