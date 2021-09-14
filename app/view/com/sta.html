@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>统计页面</title>
+    <style>
+
+        .sta div span {
+            width: 70px;
+            padding: 0px;
+            border: #b3d8ff 1px solid;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div style="color: red">
+        {switch $day }
+        {case 0 }今天{/case}
+        {case -1}昨天{/case}
+        {case -2}前天{/case}
+        {default /}(错误)
+        {/switch}
+    </div>
+    <a href="/com/sta/id/{$id}/name/{$name}/day/0">今天</a>
+    <a href="/com/sta/id/{$id}/name/{$name}/day/-1">昨天</a>
+    <a href="/com/sta/id/{$id}/name/{$name}/day/-2">前天</a>
+</div>
+<div class="sta">
+    <div><span>时间段</span><span>拉起量</span><span>成功量</span><span>成功率</span></div>
+    {foreach $list as $key=>$vo }
+    <div><span>{$vo.t}</span><span>{$vo.c}</span><span>{$vo.c1}</span><span>{$vo.f}</span></div>
+    {/foreach}
+
+</div>
+</body>
+<script>
+
+</script>
+</html>

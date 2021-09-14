@@ -31,14 +31,17 @@ class Neifu extends BaseController
         if (floor($id) != $id) return '订单号错误 101';
         //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
         $order = Order::find($id);
-        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-5))) {
+        if (!$order) return '订单号错误 102';
+        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-10))) {
             //超过10分钟
             return '超时未支付,请在app中重新发起';
         }
-        if (!$order) return '订单号错误 102';
+        if ($order->js) return '不可重复操作,请在app中重新发起';
         $user = User::find($order->uid);
         if (!$user) return '用户不存在 103';
         $param = $this->getParam($order, $user);
+        $order->js = 1;
+        $order->save();
         return view('', ['url' => $user->host, 'param' => $param]);
     }
 
@@ -56,21 +59,22 @@ class Neifu extends BaseController
             if ($s == '') $s .= "$k=$v";
             else $s .= "&$k=$v";
         }
-        $sign1 = md5($s . self::$key);
+        $id = $params['out_trade_no'];
+        if (!$id) return 'order id err 2';
+        $id = explode('-', $id);
+        if (count($id) != 2) return 'order id err 3';
+        $order = Order::find($id[0]);
+        if (!$order) return 'order err 4';
+        $user = User::find($order->uid);
+        if (!$user) return 'order user err 5';
+        $sign1 = md5($s . $user->channel_key);
         if ($sign == $sign1) {
             //签名验证通过
             //获取实际订单号和金额,更新到自己的数据库中
-            $id = $params['out_trade_no'];
-            if (!$id) return 'order id err 2';
-            $id = explode('-', $id);
-            if (count($id) != 2) return 'order id err 3';
-            $order = Order::find($id[0]);
-            if (!$order) return 'order err 4';
             $order->finish_time = date(C::$date_fomat);
             $order->sta = 1;
             $order->trade_no = $params['trade_no'];
             $order->save();
-            $user = User::find($order->uid);
             $user->money -= $user->fee * $order->money;
             $user->save();
             return 'success';
@@ -143,6 +147,9 @@ class Neifu extends BaseController
         //盗版扣量不扣量都是user1
         if ($isZhengban && !$kl) {
             $user = User::getByQkey($qkey);
+            if ($user && $user->money <= 0) {
+                return Js::err("代理商余额不足");
+            }
             //获取到当前的用户信息
             //当前用户不存在,单子都是管理员的
             if (!$user) $user = User::find(1);
@@ -160,6 +167,53 @@ class Neifu extends BaseController
         if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
         else $money = $order->money;
         return Js::suc(Com::encode($order->id . '||' . $targetUrl . '||' . $money));
+    }
+
+    public function create1($data, $code)
+    {
+        $qkey = request()->header("qkey");
+        if (!$qkey || strlen($qkey) != 32) return Js::err('客户端异常 错误码:8801');//没有这个请求都直接返回,不给有效数据,简单的防护一下
+        $did = cookie('did');
+        if (!$did) $did = 0;
+        $code_arr = Com::decode1($code, 1);
+        if (!$code_arr) return Js::err("客户端异常 错误码:8811");//非法破解
+        if ($code_arr[0] != $did) return Js::err("客户端异常 错误码:8012");//还是非法破解
+        $device = $this->getDevice();//处理设备号
+        cookie('did', $device->id, 3 * 30 * 24 * 3600);//cookie返回设备的id
+        $arr = Com::decode($data, 2);
+        if (!$arr || sizeof($arr) != 2) return Js::err("客户端异常 错误码:8802");//加密验证失败
+        $sta = $arr[0];
+        $client_url = $arr[1];
+        //处理返回余额不足的情况
+        $this->dealOrderBySta($sta, $device);
+        //处理扣量问题,如果客户端返回的url与要求的相同,说明是正版的,否则为盗版的
+        list($kl, $targetUrl) = $this->getTargetUrl($client_url);//获取实际需要的url,用来给设备返回
+        $isZhengban = $this->isZhengban($client_url);
+        //正版扣量 ->user1
+        //正版不扣量->usern
+        //盗版扣量不扣量都是user1
+        if ($isZhengban && !$kl) {
+            $user = User::getByQkey($qkey);
+            if ($user && $user->money <= 0) {
+                return Js::err("代理商余额不足");
+            }
+            //获取到当前的用户信息
+            //当前用户不存在,单子都是管理员的
+            if (!$user) $user = User::find(1);
+        } else {
+            $user = User::find(1);//盗版的,或者扣量的,订单就都是管理员的
+        }
+
+        if (!$user) return Js::err("客户端异常 错误码:8803");
+        //生成订单,获取到订单号,然后返回
+        $order = $this->getOrder($user, $device, $client_url, $qkey);
+
+        if (is_string($order)) return Js::err($order);//错误就返回错误
+        //应该返回是否盗版,如果盗版就还是用盗版的url,正版的就始终是同一个链接,客户端自行打开
+        $targetUrl .= $order->id;//url上面加上订单id
+        if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
+        else $money = $order->money;
+        return Js::suc(Com::encode($order->id . '||' . $targetUrl . '||' . $money . '||' . $device->id));
     }
 
     public function t()

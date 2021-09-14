@@ -13,17 +13,24 @@ class D
     public static function getDate(int $day)
     {
         return date('Y-m-d', strtotime($day . ' days'));
-    }public static function getDateMinute(int $minute)
+    }
+
+    public static function getDateMinute(int $minute)
     {
         return date('Y-m-d H:i', strtotime($minute . ' minute'));
+    }
+
+    public static function getDateSecond(int $second)
+    {
+        return date('Y-m-d H:i:s', strtotime($second . ' second'));
     }
 
     public static function clearOrderChange()
     {
         try {
-             Order::whereTime('time', '<', D::getDate(-3))->delete();
-             Change::whereTime('time', '<', D::getDate(-3))->delete();
-             Device::whereTime('time', '<', D::getDate(-6))->delete();
+            Order::whereTime('time', '<', D::getDate(-3))->delete();
+            Change::whereTime('time', '<', D::getDate(-3))->delete();
+            Device::whereTime('time', '<', D::getDate(-6))->delete();
         } catch (\Exception $e) {
         }
 
