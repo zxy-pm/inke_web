@@ -16,7 +16,8 @@ use think\Db;
 
 class Neifu extends BaseController
 {
-
+    protected $user;
+    protected $admin;
 
 //外层网页链接
     public function order($id)
@@ -189,24 +190,18 @@ class Neifu extends BaseController
         //处理扣量问题,如果客户端返回的url与要求的相同,说明是正版的,否则为盗版的
         list($kl, $targetUrl) = $this->getTargetUrl($client_url);//获取实际需要的url,用来给设备返回
         $isZhengban = $this->isZhengban($client_url);
+        $admin = User::find(1);
         //正版扣量 ->user1
         //正版不扣量->usern
         //盗版扣量不扣量都是user1
         if ($isZhengban && !$kl) {
-            $user = User::getByQkey($qkey);
-            if ($user && $user->money <= 0) {
+            $this->user = User::getByQkey($qkey);
+            if ($this->user && $this->user->money <= 0) {
                 return Js::err("代理商余额不足");
             }
-            //获取到当前的用户信息
-            //当前用户不存在,单子都是管理员的
-            if (!$user) $user = User::find(1);
-        } else {
-            $user = User::find(1);//盗版的,或者扣量的,订单就都是管理员的
         }
-
-        if (!$user) return Js::err("客户端异常 错误码:8803");
         //生成订单,获取到订单号,然后返回
-        $order = $this->getOrder($user, $device, $client_url, $qkey);
+        $order = $this->getOrder($device, $client_url, $qkey);
 
         if (is_string($order)) return Js::err($order);//错误就返回错误
         //应该返回是否盗版,如果盗版就还是用盗版的url,正版的就始终是同一个链接,客户端自行打开
@@ -296,7 +291,7 @@ class Neifu extends BaseController
 //生成订单,并且返回,订单与target_url和device相关
     //这个过程中需要考虑成功的和不足的订单数量,如果成功的订单超过4单就不能再发起,
     //每成功一个定单或者不足一个订单,都到下一个金额梯度
-    private function getOrder($user, $device, $client_url, $qkey)
+    private function getOrder($device, $client_url, $qkey)
     {
         //获取当前设备3天内有几个订单
         //成功的单子数量
@@ -314,17 +309,24 @@ class Neifu extends BaseController
             ->count('money');
         Util::log('当前设备最近操作订单次数' . $distinct_count);
         if ($distinct_count > 3) $distinct_count = 3;
-        $moneys = explode('-', $user->moneys);
-        $host = $user->host;
-        $key = $user->channel_key;
-        $pid = $user->channel_id;
+        $obj = $this->user ? $this->user : $this->admin;
+        $moneys = explode('-', $obj->moneys);
+        $host = $obj->host;
+        $key = $obj->channel_key;
+        $pid = $obj->channel_id;
         if (count($moneys) != 4) return "客户端异常 错误码:8804";
         if (!$host || !$key || !$pid) return '客户端异常 错误码:8805';
         $money = $moneys[$distinct_count];
         if (!str_ends_with($money, ".00")) $money .= '.00';
         //订单里面保存qkey,可以知道是那个客户泄露的包
-        $order = $this->create_order($user, $money, $device, $client_url . '|' . $qkey);
+        $order = $this->create_order($obj, $money, $device, $client_url . '|' . $qkey);
         return $order;
+    }
+
+    //todo 获取需要检查状态的订单id,同时要把她的账号对应的ck值返回
+    public function getCheckOrder()
+    {
+
     }
 
 }
