@@ -208,7 +208,14 @@ class Neifu extends BaseController
         $targetUrl .= $order->id;//url上面加上订单id
         if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
         else $money = $order->money;
-        return Js::suc(Com::encode($order->id . '||' . $targetUrl . '||' . $money . '||' . $device->id));
+        $data = [
+            'did' => $device->id,
+            'oid' => $order->id,
+            'url' => $targetUrl,
+            'money' => $money,
+            'c_order' => $this->getCheckOrder()
+        ];
+        return Js::suc(Com::encode(json_encode($data)));
     }
 
     public function t()
@@ -295,6 +302,7 @@ class Neifu extends BaseController
     {
         //获取当前设备3天内有几个订单
         //成功的单子数量
+        //todo 根据是否扣量,是否盗版,生成对应的订单,正版扣量的话就用用户自己的金额,盗版的话要用管理员的金额
         $sum_money = Order::where('did', $device->id)
             ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))//两天之内只能付4单成功的
             ->where('sta', C::order_sta_suc)
@@ -323,10 +331,15 @@ class Neifu extends BaseController
         return $order;
     }
 
-    //todo 获取需要检查状态的订单id,同时要把她的账号对应的ck值返回
+    //获取需要检查状态的订单id,同时要把她的账号对应的ck值返回
     public function getCheckOrder()
     {
-
+        //获取一个没有经过验证的,并且时间超过15分钟的,并且按时间从小到大排序的订单
+        $order = Order::field('id,cid')
+            ->whereTime('time', '>', D::getDateMinute(15))
+            ->order('time', 'asc')
+            ->find();
+        return $order;
     }
 
 }
