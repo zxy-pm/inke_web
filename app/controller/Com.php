@@ -14,6 +14,7 @@ use app\util\D;
 use app\util\Js;
 use app\util\Util;
 use think\facade\Db;
+use think\response\Json;
 
 class Com extends BaseController
 {
@@ -124,6 +125,10 @@ class Com extends BaseController
         $s = str_replace("=", "", $s);
         return $s;
     }
+    //加密json
+    public static function encodeJson($json){
+        return self::encode(json_encode($json));
+    }
 
     //解密
 
@@ -141,6 +146,16 @@ class Com extends BaseController
         } else {
             return null;
         }
+    }
+    public static function decodeJson(string $s)
+    {
+        $s = substr($s, 3);
+        $s = base64_decode($s);
+        $s = substr($s, 3);
+        $s = base64_decode($s);
+        $s = substr($s, 3);
+        $s = base64_decode($s);
+       return json_decode($s,true);
     }  //解密
 
     public static function decode1(string $s, int $count)

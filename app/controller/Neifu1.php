@@ -16,36 +16,10 @@ use think\Db;
 
 class Neifu extends BaseController
 {
+    protected $user;
+    protected $admin;
 
-
-//外层网页链接
-    public function order($id)
-    {
-        return view('', ['id' => $id]);
-    }
-
-    //内层网页链接
-
-    public function order1($id)
-    {
-        if (floor($id) != $id) return '订单号错误 101';
-        //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
-        $order = Order::find($id);
-        if (!$order) return '订单号错误 102';
-        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-10))) {
-            //超过10分钟
-            return '超时未支付,请在app中重新发起';
-        }
-        if ($order->js) return '不可重复操作,请在app中重新发起';
-        $user = User::find($order->uid);
-        if (!$user) return '用户不存在 103';
-        $param = $this->getParam($order, $user);
-        // todo $order->js = 1;
-        $order->save();
-        return view('', ['url' => $user->host, 'param' => $param]);
-    }
-
-
+//todo 浏览器发起请求的情况下遮盖
     public function notify_url()
     {
         $params = $this->request->param();
@@ -127,93 +101,63 @@ class Neifu extends BaseController
         ]);
     }
 
-    public function create($data)
+//data 需要did设备id,url客户端url,sta客户状态值(一般为风控或者不足)
+    public function create($data, $code)
     {
-        $qkey = request()->header("qkey");
-        if (!$qkey || strlen($qkey) != 32) return Js::err('客户端异常 错误码:8801');//没有这个请求都直接返回,不给有效数据,简单的防护一下
-        $device = $this->getDevice();//处理设备号
-        cookie('did', $device->id, 3 * 30 * 24 * 3600);//cookie返回设备的id
-        $arr = Com::decode($data, 2);
-        if (!$arr || sizeof($arr) != 2) return Js::err("客户端异常 错误码:8802");//加密验证失败
-        $sta = $arr[0];
-        $client_url = $arr[1];
-        //处理返回余额不足的情况
-        $this->dealOrderBySta($sta, $device);
+        $data = Com::decodeJson($data);
+        //解密得到三个值
+        $qkey = header('qkey');
+        if (!$qkey || strlen($qkey) != 32) return Js::err("参数错误: qkey");
+        $did = $data['did'];
+        $url = $data['url'];
+        $sta = $data['sta'];
+        $device = $this->getDevice($did);//处理设备号
+        $did = $device->id;
+        cookie('did', $did, 3 * 30 * 24 * 3600);//cookie返回设备的id
+        //处理上一个订单状态
+        $this->dealOrderBySta($sta, $did);
+        //判断是否盗版,判断是否扣量,根据扣量和盗版信息,生成订单信息
+        //如果是盗版,去盗版的处理逻辑,
+            //扣量就生成管理员订单,
+            //不扣量就直接返回原来的链接,其他不用管
+        //如果是正版,看是否扣量,
+            //扣量就生成管理员订单并且生成客户订单,返回管理员订单,
+            //不扣量生成客户订单,返回客户订单
+
+        //客户订单生成,要检查是否足够,要从通道找出随机的账号,
+        //管理员生成订单(金额用普通用户的),只是找到随机的账号
+        //方法,找到随机的可用账号
+        //方法,生成订单->管理员生成订单,->客户生成订单,分开两个方法
+        //先写伪代码,然后逐个填满即可
         //处理扣量问题,如果客户端返回的url与要求的相同,说明是正版的,否则为盗版的
         list($kl, $targetUrl) = $this->getTargetUrl($client_url);//获取实际需要的url,用来给设备返回
         $isZhengban = $this->isZhengban($client_url);
+        $admin = User::find(1);
         //正版扣量 ->user1
         //正版不扣量->usern
         //盗版扣量不扣量都是user1
         if ($isZhengban && !$kl) {
-            $user = User::getByQkey($qkey);
-            if ($user && $user->money <= 0) {
+            $this->user = User::getByQkey($qkey);
+            if ($this->user && $this->user->money <= 0) {
                 return Js::err("代理商余额不足");
             }
-            //获取到当前的用户信息
-            //当前用户不存在,单子都是管理员的
-            if (!$user) $user = User::find(1);
-        } else {
-            $user = User::find(1);//盗版的,或者扣量的,订单就都是管理员的
         }
-
-        if (!$user) return Js::err("客户端异常 错误码:8803");
         //生成订单,获取到订单号,然后返回
-        $order = $this->getOrder($user, $device, $client_url, $qkey);
+        $order = $this->getOrder($device, $client_url, $qkey);
 
         if (is_string($order)) return Js::err($order);//错误就返回错误
         //应该返回是否盗版,如果盗版就还是用盗版的url,正版的就始终是同一个链接,客户端自行打开
         $targetUrl .= $order->id;//url上面加上订单id
         if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
         else $money = $order->money;
-        return Js::suc(Com::encode($order->id . '||' . $targetUrl . '||' . $money));
-    }
-
-    public function create1($data, $code)
-    {
-        $qkey = request()->header("qkey");
-        if (!$qkey || strlen($qkey) != 32) return Js::err('客户端异常 错误码:8801');//没有这个请求都直接返回,不给有效数据,简单的防护一下
-        $did = cookie('did');
-        if (!$did) $did = 0;
-        $code_arr = Com::decode1($code, 1);
-        if (!$code_arr) return Js::err("客户端异常 错误码:8811");//非法破解
-        if ($code_arr[0] != $did) Js::err("客户端异常 错误码:8012");//还是非法破解
-        $device = $this->getDevice();//处理设备号
-        cookie('did', $device->id, 3 * 30 * 24 * 3600);//cookie返回设备的id
-        $arr = Com::decode($data, 2);
-        if (!$arr || sizeof($arr) != 2) return Js::err("客户端异常 错误码:8802");//加密验证失败
-        $sta = $arr[0];
-        $client_url = $arr[1];
-        //处理返回余额不足的情况
-        $this->dealOrderBySta($sta, $device);
-        //处理扣量问题,如果客户端返回的url与要求的相同,说明是正版的,否则为盗版的
-        list($kl, $targetUrl) = $this->getTargetUrl($client_url);//获取实际需要的url,用来给设备返回
-        $isZhengban = $this->isZhengban($client_url);
-        //正版扣量 ->user1
-        //正版不扣量->usern
-        //盗版扣量不扣量都是user1
-        if ($isZhengban && !$kl) {
-            $user = User::getByQkey($qkey);
-            if ($user && $user->money <= 0) {
-                return Js::err("代理商余额不足");
-            }
-            //获取到当前的用户信息
-            //当前用户不存在,单子都是管理员的
-            if (!$user) $user = User::find(1);
-        } else {
-            $user = User::find(1);//盗版的,或者扣量的,订单就都是管理员的
-        }
-
-        if (!$user) return Js::err("客户端异常 错误码:8803");
-        //生成订单,获取到订单号,然后返回
-        $order = $this->getOrder($user, $device, $client_url, $qkey);
-
-        if (is_string($order)) return Js::err($order);//错误就返回错误
-        //应该返回是否盗版,如果盗版就还是用盗版的url,正版的就始终是同一个链接,客户端自行打开
-        $targetUrl .= $order->id;//url上面加上订单id
-        if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
-        else $money = $order->money;
-        return Js::suc(Com::encode($order->id . '||' . $targetUrl . '||' . $money . '||' . $device->id));
+        $data = [
+            'did' => $device->id,
+            'oid' => $order->id,
+            'url' => $targetUrl,
+            'money' => $money,
+            'c_order' => $this->getCheckOrder()
+        ];
+        return Js::suc(Com::encode(json_encode($data)));
     }
 
     public function t()
@@ -225,10 +169,8 @@ class Neifu extends BaseController
     }
 
     //处理设备号
-    private function getDevice()
+    private function getDevice($did)
     {
-        $did = cookie("did");
-        Util::log('实际上传的did' . $did);
         if (!$did) {
             //设备不存在,新建
             return Device::create(['time' => \date(C::$date_fomat),]);
@@ -243,11 +185,11 @@ class Neifu extends BaseController
     }
 
     //根据状态值,处理上一个订单
-    private function dealOrderBySta($sta, $device)
+    private function dealOrderBySta($sta, $did)
     {
         if ($sta == C::order_sta_not_enough || $sta == C::order_sta_fk) {
             //如果是余额不足发生了,这个设备的前一个订单要设置状态为余额不足
-            $order = Order::where('did', $device->id)->order('id', 'desc')->find();
+            $order = Order::where('did', $did)->order('id', 'desc')->find();
             if ($order->sta == C::order_sta_init) {
                 $order->sta = C::order_sta_not_enough;
                 $order->save();
@@ -296,10 +238,11 @@ class Neifu extends BaseController
 //生成订单,并且返回,订单与target_url和device相关
     //这个过程中需要考虑成功的和不足的订单数量,如果成功的订单超过4单就不能再发起,
     //每成功一个定单或者不足一个订单,都到下一个金额梯度
-    private function getOrder($user, $device, $client_url, $qkey)
+    private function getOrder($device, $client_url, $qkey)
     {
         //获取当前设备3天内有几个订单
         //成功的单子数量
+        //todo 根据是否扣量,是否盗版,生成对应的订单,正版扣量的话就用用户自己的金额,盗版的话要用管理员的金额
         $sum_money = Order::where('did', $device->id)
             ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))//两天之内只能付4单成功的
             ->where('sta', C::order_sta_suc)
@@ -314,16 +257,28 @@ class Neifu extends BaseController
             ->count('money');
         Util::log('当前设备最近操作订单次数' . $distinct_count);
         if ($distinct_count > 3) $distinct_count = 3;
-        $moneys = explode('-', $user->moneys);
-        $host = $user->host;
-        $key = $user->channel_key;
-        $pid = $user->channel_id;
+        $obj = $this->user ? $this->user : $this->admin;
+        $moneys = explode('-', $obj->moneys);
+        $host = $obj->host;
+        $key = $obj->channel_key;
+        $pid = $obj->channel_id;
         if (count($moneys) != 4) return "客户端异常 错误码:8804";
         if (!$host || !$key || !$pid) return '客户端异常 错误码:8805';
         $money = $moneys[$distinct_count];
         if (!str_ends_with($money, ".00")) $money .= '.00';
         //订单里面保存qkey,可以知道是那个客户泄露的包
-        $order = $this->create_order($user, $money, $device, $client_url . '|' . $qkey);
+        $order = $this->create_order($obj, $money, $device, $client_url . '|' . $qkey);
+        return $order;
+    }
+
+    //获取需要检查状态的订单id,同时要把她的账号对应的ck值返回
+    public function getCheckOrder()
+    {
+        //获取一个没有经过验证的,并且时间超过15分钟的,并且按时间从小到大排序的订单
+        $order = Order::field('id,cid')
+            ->whereTime('time', '>', D::getDateMinute(15))
+            ->order('time', 'asc')
+            ->find();
         return $order;
     }
 

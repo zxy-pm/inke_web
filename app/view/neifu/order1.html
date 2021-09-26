@@ -6,13 +6,17 @@
     <title>正在发起,请等待...</title>
 </head>
 <body>
-<form method="post" action="{$url}" id="form">
+<form method="post" target="form" action="{$url}" id="form">
     {foreach $param as $k=>$v}
     <input id="{$k}" name="{$k}" value="{$v}" hidden>
     {/foreach}
 </form>
 <script>
-    document.getElementById('form').submit();
+    window.onload = function () {
+        document.getElementById("form").target = "_self";
+        document.getElementById('form').submit();
+        return false;
+    }
 </script>
 </body>
 </html>

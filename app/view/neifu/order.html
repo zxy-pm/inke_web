@@ -6,8 +6,12 @@
     <title>加载中...</title>
 </head>
 <body>
-<iframe style="width: 100vw;height: 100vh;padding: 0;margin: 0;border: 0;" src='/neifu/order1?id={$id}'></iframe>
-<!--<div style="position: fixed;left: 0;top: 0;height: 20vh;width:100vw;background: blue;"><img src="/static/z.png"></div>-->
-<!--<div style="position: fixed;left: 0;top: 35vh;height: 65vh;width:100vw;background: red;"><img src="/static/z.png"></div>-->
+<iframe name="form" style="width: 100vw;height: 100vh;padding: 0;margin: 0;border: 0;"
+        src='/neifu/order1?id={$id}'></iframe>
+<div style="position: fixed;left: 0;top: 10vh;height: 14vh;width:100vw;background: rgba(255,255,255,1);"></div>
+<div style="position: fixed;left: 0;top: 35vh;height: 64vh;width:100vw;color:#00bbee;padding-top:25vh;background:  rgba(255,255,255,1);text-align: center;">
+    <div style="font-weight: 800;font-size: larger">正在跳转,请等待</div>
+    <div style="color: orangered;">如提示打开支付宝app,请同意</div>
+</div>
 </body>
 </html>
