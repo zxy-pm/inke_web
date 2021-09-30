@@ -142,13 +142,14 @@ class UserL extends BaseL
     }
 
     //用户自己的信息(通道id,通道key)
-    public function user_ch($id, $key, $moneys, $host)
+    public function user_ch($id, $key, $moneys, $host,$tongdao_type)
     {
         //不是指定的参数直接返回错误
         $this->user->channel_id = $id;
         $this->user->channel_key = $key;
         $this->user->moneys = $moneys;
         $this->user->host = $host;
+        $this->user->tongdao_type = $tongdao_type;
         $this->user->save();
         //正常修改完成,返回成功
         return Js::suc();

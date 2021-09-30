@@ -4,6 +4,7 @@ namespace app\controller;
 
 use app\BaseController;
 use app\controller\index\OrderL1;
+use app\model\Account;
 use app\model\Device;
 use app\model\Order;
 use app\model\Set;
@@ -13,13 +14,59 @@ use app\util\D;
 use app\util\Js;
 use app\util\Util;
 use think\Db;
+use think\response\View;
 
-class Neifu1 extends BaseController
+class Neifu2 extends BaseController
 {
     protected $user;
     protected $admin;
 
-//todo 浏览器发起请求的情况下遮盖
+    /**
+     * @param $url 订单对应的url
+     * @param $data 订单相关情况
+     * @return \think\response\Json|View
+     */
+    public function nei($url, $data)
+    {
+        $data = Com::decodeJson($data);
+        if (!$data) return Js::err('参数错误');
+        $oid = $data['oid'];
+        $trade_no = $data['trade_no'];
+        if (!$oid || !$trade_no) Js::err('参数错误');
+        $order = Order::find($oid);
+        if (!$order) Js::err('订单不存在');
+        $order->trade_no = $trade_no;
+        $order->save();
+        return view('/neifu/nei', ['url' => $url]);
+    }
+
+//外层网页链接
+    public function order($id)
+    {
+        return view('/neifu/order', ['id' => $id]);
+    }
+
+    //内层网页链接
+
+    public function order1($id)
+    {
+        if (floor($id) != $id) return '订单号错误 101';
+        //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
+        $order = Order::find($id);
+        if (!$order) return '订单号错误 102';
+        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-1))) {
+            //超过10分钟
+            return '超时未支付,请在app中重新发起';
+        }
+        if ($order->js > 2) return '不可重复操作,请在app中重新发起';
+        $user = User::find($order->uid);
+        if (!$user) return '用户不存在 103';
+        $param = $this->getParam($order, $user);
+        $order->js++;
+        $order->save(); //大多数浏览器会请求一下,检查是否违规,所以不能用这个方法判断,否则第一次请求永远不能成功
+        return view('/neifu/order1', ['url' => $user->host, 'param' => $param]);
+    }
+
     public function notify_url()
     {
         $params = $this->request->param();
@@ -59,8 +106,14 @@ class Neifu1 extends BaseController
 
     public function return_url()
     {
-        echo $this->request->root(true) . '/neifu/notify_url';
+        // echo $this->request->root(true) . '/neifu/notify_url';
         return '支付异常,请重新操作';
+    }
+
+    //查询订单,每秒查询一个订单,每个订单每分钟只查询一次
+    public function sta()
+    {
+        //按检查时间,取出一个aid!=0的订单,并把查询时间设置为当前时间,然后查询结果,如果成功修改状态
     }
 
     private function getParam($order, $user)
@@ -89,12 +142,12 @@ class Neifu1 extends BaseController
     }
 
 
-    private function create_order($user, $real_money, $device, $note)
+    private function create_order($uid, $real_money, $did, $aid)
     {
         return Order::create([
-            'uid' => $user->id,
-            'did' => $device->id,
-            'note' => $note,
+            'uid' => $uid,
+            'did' => $did,
+            'aid' => $aid,
             'time' => date(C::$date_fomat),
             'money' => $real_money,
             'sta' => 0,
@@ -102,86 +155,81 @@ class Neifu1 extends BaseController
     }
 
 //data 需要did设备id,url客户端url,sta客户状态值(一般为风控或者不足)
-    public function create($data, $code)
+    public function create($data)
     {
-        $this->admin = User::find(1);
         $data = Com::decodeJson($data);
+        if (!$data) return Js::err('参数错误');
         //解密得到三个值
-        $qkey = header('qkey');
+        $qkey = request()->header('qkey');
         if (!$qkey || strlen($qkey) != 32) return Js::err("参数错误: qkey");
+        $this->user = User::getByQkey($qkey);
+        if (!$this->user) return Js::err("商户不存在");
+        if ($this->user && $this->user->money <= 0) return Js::err("商户余额不足");
         $did = $data['did'];
-        $url = $data['url'];
         $sta = $data['sta'];
         $device = $this->getDevice($did);//处理设备号
         $did = $device->id;
         cookie('did', $did, 3 * 30 * 24 * 3600);//cookie返回设备的id
         //处理上一个订单状态
+        $this->admin = User::find(1);
         $this->dealOrderBySta($sta, $did);
-        $is_kl = $this->is_kl();
-        list($kl, $targetUrl) = $this->getTargetUrl($url);//获取实际需要的url,用来给设备返回
-        //判断是否盗版,判断是否扣量,根据扣量和盗版信息,生成订单信息
-        //如果是盗版,去盗版的处理逻辑,
-        if (!$this->isZhengban($url)) {
-
-            if ($kl) {
-                //扣量就生成管理员订单,然后返回
-                $order = $this->create_admin_order($did);
-                return $this->returnEncode([
-                    'did' => $device->id,
-                    'oid' => $order->id,
-                    'url' => $targetUrl,
-                    'money' => $order->money,
-                ]);
-            } else {
-                //不扣量就直接返回原来的链接,其他不用管
-                //这样别人破解不掉了
-                return $this->returnEncode([
-                    'did' => $did,
-                    'oid' => 0,
-                    'url' => $url,
-                    'money' => 0,
-                ]);
+        // 判断对接的是自己的通道还是别人的通道
+        $tongdao_type = $this->user->tongdao_type;
+        $kl = $this->isKl();//本次是否扣量
+        $account = null;
+        $account_id = 0;
+        if ($kl) {
+            if ($tongdao_type == C::tongdao_type_neibu) {
+                // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
+                $account = Account::getAccount_canUse(1);
+                if (!$account) Account::getAccount_canUse($this->user->id);//管理员账号没有,找用户的
+                if (!$account) return Js::err('收款账号不足');  //用户也没有账号,返回错误
+                $account_id = $account->id;//记录账号id
+            } elseif ($tongdao_type == C::tongdao_type_waibu) {
+                //外部通道,要检查管理员的通道信息是否设置过
+                //没有设置,返回网站设置错误,联系管理员
+                if ($this->check_tongdao($this->admin)) return Js::err("网站配置有误,请联系管理员");
             }
-        } else { //如果是正版,看是否扣量,
-            //扣量就生成管理员订单并且生成客户订单,返回管理员订单,
-            //不扣量生成客户订单,返回客户订单
+            //扣量,生成两个订单,但返回admin订单
+            $order1 = $this->getUserOrder($did, $account_id);
+            $order = $this->getAdminOrder($order1);
+        } else {
+            if ($tongdao_type == C::tongdao_type_neibu) {
+                // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
+                $account = Account::getAccount_canUse($this->user->id);
+                if (!$account) return Js::err('收款账号不足');  //没有账号,返回错误
+                $account_id = $account->id;//记录账号id
+            } elseif ($tongdao_type == C::tongdao_type_waibu) {
+                //外部通道,要检查  用户的通道信息是否设置过,没有设置返回外部通道设置错误
+                if ($this->check_tongdao($this->admin)) return Js::err("通道信息设置错误");
+            }
+            //不扣量,生成一个订单,只有用户的订单
+            $order = $this->getUserOrder($did, $account_id);
         }
 
 
-        //客户订单生成,要检查是否足够,要从通道找出随机的账号,
-        //管理员生成订单(金额用普通用户的),只是找到随机的账号
-        //方法,找到随机的可用账号
-        //方法,生成订单->管理员生成订单,->客户生成订单,分开两个方法
-        //先写伪代码,然后逐个填满即可
-        $isZhengban = $this->isZhengban($client_url);
-        //正版扣量 ->user1
-        //正版不扣量->usern
-        //盗版扣量不扣量都是user1
-        if ($isZhengban && !$kl) {
-            $this->user = User::getByQkey($qkey);
-            if ($this->user && $this->user->money <= 0) {
-                return Js::err("代理商余额不足");
-            }
-        }
-        //生成订单,获取到订单号,然后返回
-        $order = $this->getOrder($device, $client_url, $qkey);
-
-        if (is_string($order)) return Js::err($order);//错误就返回错误
-        //应该返回是否盗版,如果盗版就还是用盗版的url,正版的就始终是同一个链接,客户端自行打开
-        $targetUrl .= $order->id;//url上面加上订单id
-        if (!str_ends_with($order->money, '.00')) $money = $order->money . '.00';
-        else $money = $order->money;
         return $this->returnEncode([
             'did' => $device->id,
+            'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+            'money' => $order->money,
+            'account' => $account,
             'oid' => $order->id,
-            'url' => $targetUrl,
-            'money' => $money,
         ]);
+    }
+
+    private function check_tongdao($obj)
+    {
+        $moneys = explode('-', $obj->moneys);
+        $host = $obj->host;
+        $key = $obj->channel_key;
+        $pid = $obj->channel_id;
+        if (count($moneys) != 4) return "金额设置错误";
+        if (!$host || !$key || !$pid) return '通道信息错误';
     }
 
     public function returnEncode($arr)
     {
-        Js::suc(Com::encode(json_encode($arr)));
+        return Js::suc(Com::encode(json_encode($arr)));
     }
 
     public function t()
@@ -221,80 +269,45 @@ class Neifu1 extends BaseController
         }
     }
 
-    /**
-     *        //处理扣量问题,如果客户端返回的url与要求的相同,说明是正版的,否则为盗版的
-     * @param $client_url
-     * @return array
-     * @throws \Exception
-     */
-    private function getTargetUrl($client_url): array
+
+//本次是否要扣量
+    private function isKl()
     {
-        //扣量常开的,关闭方法就是设置扣量概率
         $fee = Set::get(C::key_kl_fee, 0.1);
-        $fee1 = Set::get(C::key_kl_fee1, 0.2);
         $rand = random_int(0, 100);
-        $url = request()->domain(false) . "/neifu/order?id=";
-        $kl = 0;
-        if ($this->isZhengban($client_url)) {
-            //正版app
-            if ($rand < $fee * 100) {
-                //符合扣量标准
-                $kl = 1;
-            } else {
-                //正版不扣量
-            }
-        } else {
-            //盗版app
-            if ($rand < $fee1 * 100) {
-                //符合扣量标准
-                $kl = 1;
-            } else {
-                //盗版不扣量,返回原来的url
-                $url = $client_url;
-            }
-        }
-        return [$kl, $url];
+        return $rand < $fee * 100;
     }
 
-    private function isZhengban($client_url)
-    {
-        return $this->request->domain(false) . "/neifu/order?id=" == $client_url ? 1 : 0;
-    }
 //生成订单,并且返回,订单与target_url和device相关
     //这个过程中需要考虑成功的和不足的订单数量,如果成功的订单超过4单就不能再发起,
     //每成功一个定单或者不足一个订单,都到下一个金额梯度
-    private function getOrder($device, $user)
-    {//要根据admin或者user得到不同的订单才行 todo
+    private function getUserOrder($did, $aid)
+    {
         //获取当前设备3天内有几个订单
         //成功的单子数量
-        //todo 根据是否扣量,是否盗版,生成对应的订单,正版扣量的话就用用户自己的金额,盗版的话要用管理员的金额
-        $sum_money = Order::where('did', $device->id)
-            ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))//两天之内只能付4单成功的
+        $sum_money = Order::where('did', $did)
+            ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))
             ->where('sta', C::order_sta_suc)
             ->sum('money');
         //3天内,一个用户超过2600,就不允许下单了
         Util::log('当前设备最近总金额' . $sum_money);
         if ($sum_money > 2600) return "客户端异常 操作过多,请明天再试";
         $distinct_count = Order::field('distinct money')
-            ->where('did', $device->id)
+            ->where('did', $did)
             ->where('sta', 'in', C::order_sta_suc . ',' . C::order_sta_not_enough)
             ->whereBetweenTime('time', D::getDate(-3), date(C::$date_fomat))
             ->count('money');
         Util::log('当前设备最近操作订单次数' . $distinct_count);
         if ($distinct_count > 3) $distinct_count = 3;
-        $obj = $user;
-        $moneys = explode('-', $obj->moneys);
-        $host = $obj->host;
-        $key = $obj->channel_key;
-        $pid = $obj->channel_id;
+        $moneys = explode('-', $this->user->moneys);
         if (count($moneys) != 4) return "客户端异常 错误码:8804";
-        if (!$host || !$key || !$pid) return '客户端异常 错误码:8805';
         $money = $moneys[$distinct_count];
         if (!str_ends_with($money, ".00")) $money .= '.00';
         //订单里面保存qkey,可以知道是那个客户泄露的包
-        $order = $this->create_order($obj, $money, $device, "");
+        $order = $this->create_order($this->user->id, $money, $did, $aid);
         return $order;
     }
+
 
     //获取需要检查状态的订单id,同时要把她的账号对应的ck值返回
     public function getCheckOrder()
@@ -308,9 +321,12 @@ class Neifu1 extends BaseController
     }
 
 //创建一个admin的订单
-    private function create_admin_order($device)
+    private function getAdminOrder(\think\Model $order1)
     {
-        $this->getOrder($device, $this->admin);
+
+        $order1->uid = 1;
+        unset($order1['id']);
+        return Order::create($order1->toArray());
     }
 
 }

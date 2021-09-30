@@ -31,7 +31,7 @@ class Admin extends BaseController
                 Js::logout()->send();
                 exit(0);
             }
-            $this->user = User::field('id,name,money,fee,type,kl,kl_fee,klsd,channel_id,channel_key,host,moneys')->getByToken($token);
+            $this->user = User::field('id,name,money,fee,type,kl,kl_fee,klsd,channel_id,channel_key,host,moneys,tongdao_type')->getByToken($token);
             if (!$this->user) {
                 Js::logout()->send();
                 exit(0);
@@ -193,9 +193,9 @@ class Admin extends BaseController
         return UserL::create($this->user)->users1();
     }
 
-    public function user_ch($id, $key, $moneys, $host)
+    public function user_ch($id, $key, $moneys, $host,$tongdao_type)
     {
-        return UserL::create($this->user)->user_ch($id, $key, $moneys, $host);
+        return UserL::create($this->user)->user_ch($id, $key, $moneys, $host,$tongdao_type);
     }
 
     public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link)

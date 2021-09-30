@@ -89,6 +89,7 @@ class OrderL extends BaseL
             'channel_key' => $this->user->channel_key,
             'moneys' => $this->user->moneys,
             'host' => $this->user->host,
+            'tongdao_type' => $this->user->tongdao_type,
         ]);
     }
 
