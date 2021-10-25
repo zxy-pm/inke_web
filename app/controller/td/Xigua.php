@@ -4,6 +4,7 @@
 namespace app\controller\td;
 
 
+use app\model\User;
 use app\util\C;
 use app\util\D;
 use app\util\Net;
@@ -28,6 +29,11 @@ class Xigua
         } elseif ($res['code'] == 'CA3001') {
             //交易成功了
             $order['sta'] = 1;
+            $user = User::field('id,money,fee')->find($order->uid);
+            if($user){
+                $user->money -= $order->money*$user->fee;//用户余额扣减
+                $user->save();
+            }
             $order->save();
             return '支付成功,id:' . $order->id;
         } else {

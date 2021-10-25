@@ -25,7 +25,7 @@ class Sta extends BaseController
     {
         //找到一个状态为0
         $order = Order::
-        field('id,trade_no,note,sta,aid,cid')
+        field('id,trade_no,note,sta,aid,cid,uid,money')
             ->where('sta', 0)
             ->whereTime('finish_time', '<', D::getDateMinute(-1))
             ->order('finish_time','asc')
