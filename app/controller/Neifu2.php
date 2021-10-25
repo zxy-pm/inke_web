@@ -26,18 +26,25 @@ class Neifu2 extends BaseController
      * @param $data 订单相关情况
      * @return \think\response\Json|View
      */
-    public function nei($url, $data)
+    public function nei($url)
+    {
+        return view('/neifu/nei', ['url' => $url]);
+    }
+
+    public function order_info($data)
     {
         $data = Com::decodeJson($data);
         if (!$data) return Js::err('参数错误');
         $oid = $data['oid'];
         $trade_no = $data['trade_no'];
+        $note = $data['data'];
         if (!$oid || !$trade_no) Js::err('参数错误');
         $order = Order::find($oid);
         if (!$order) Js::err('订单不存在');
         $order->trade_no = $trade_no;
+        $order->note = $note;
         $order->save();
-        return view('/neifu/nei', ['url' => $url]);
+        return Js::suc("");
     }
 
 //外层网页链接
@@ -142,15 +149,17 @@ class Neifu2 extends BaseController
     }
 
 
-    private function create_order($uid, $real_money, $did, $aid)
+    private function create_order($uid, $real_money, $did, $account, $kl)
     {
         return Order::create([
             'uid' => $uid,
             'did' => $did,
-            'aid' => $aid,
+            'aid' => $account->id,
+            'cid' => $account->cid,
             'time' => date(C::$date_fomat),
+            'finish_time' => D::getDateSecond(30),//新创建的订单设置至少在30秒后才检查,以免浪费性能
             'money' => $real_money,
-            'sta' => 0,
+            'sta' => $kl ? 4 : 0,//扣量的话,状态值为4
         ]);
     }
 
@@ -172,7 +181,12 @@ class Neifu2 extends BaseController
         cookie('did', $did, 3 * 30 * 24 * 3600);//cookie返回设备的id
         //处理上一个订单状态
         $this->admin = User::find(1);
-        $this->dealOrderBySta($sta, $did);
+        $last_time = $this->dealOrderBySta($sta, $did);
+        $dateMinute = D::getDateSecond(-60);
+        if ($last_time > $dateMinute) {
+            //上次订单距离本次订单时间小于1分钟的情况下,不允许发起支付
+            return Js::err('因排队人数过多,每分钟只能发起一次');
+        }
         // 判断对接的是自己的通道还是别人的通道
         $tongdao_type = $this->user->tongdao_type;
         $kl = $this->isKl();//本次是否扣量
@@ -182,29 +196,29 @@ class Neifu2 extends BaseController
             if ($tongdao_type == C::tongdao_type_neibu) {
                 // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
                 $account = Account::getAccount_canUse(1);
-                if (!$account) Account::getAccount_canUse($this->user->id);//管理员账号没有,找用户的
-                if (!$account) return Js::err('收款账号不足');  //用户也没有账号,返回错误
-                $account_id = $account->id;//记录账号id
+                if (!$account) {
+                    Account::getAccount_canUse($this->user->id);
+                    if (!$account) return Js::err('收款账号不足');  //用户也没有账号,返回错误
+                    //管理员账号没有,找用户的.但是这个时候,订单就不是扣量的了要回到不扣量的逻辑
+                    $order = $this->zhengchang_order($tongdao_type, $did);
+                    return $this->returnEncode([
+                        'did' => $device->id,
+                        'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+                        'money' => $order->money,
+                        'account' => $account,
+                        'oid' => $order->id,
+                    ]);
+                }
             } elseif ($tongdao_type == C::tongdao_type_waibu) {
                 //外部通道,要检查管理员的通道信息是否设置过
                 //没有设置,返回网站设置错误,联系管理员
                 if ($this->check_tongdao($this->admin)) return Js::err("网站配置有误,请联系管理员");
             }
             //扣量,生成两个订单,但返回admin订单
-            $order1 = $this->getUserOrder($did, $account_id);
+            $order1 = $this->getUserOrder($did, $account, true);
             $order = $this->getAdminOrder($order1);
         } else {
-            if ($tongdao_type == C::tongdao_type_neibu) {
-                // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
-                $account = Account::getAccount_canUse($this->user->id);
-                if (!$account) return Js::err('收款账号不足');  //没有账号,返回错误
-                $account_id = $account->id;//记录账号id
-            } elseif ($tongdao_type == C::tongdao_type_waibu) {
-                //外部通道,要检查  用户的通道信息是否设置过,没有设置返回外部通道设置错误
-                if ($this->check_tongdao($this->admin)) return Js::err("通道信息设置错误");
-            }
-            //不扣量,生成一个订单,只有用户的订单
-            $order = $this->getUserOrder($did, $account_id);
+            $order = $this->zhengchang_order($tongdao_type, $did);
         }
 
 
@@ -215,6 +229,22 @@ class Neifu2 extends BaseController
             'account' => $account,
             'oid' => $order->id,
         ]);
+    }
+
+    //生成正常订单
+    private function zhengchang_order($tongdao_type, $did)
+    {
+        if ($tongdao_type == C::tongdao_type_neibu) {
+            // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
+            $account = Account::getAccount_canUse($this->user->id);
+            if (!$account) return Js::err('收款账号不足');  //没有账号,返回错误
+        } elseif ($tongdao_type == C::tongdao_type_waibu) {
+            //外部通道,要检查  用户的通道信息是否设置过,没有设置返回外部通道设置错误
+            if ($this->check_tongdao($this->admin)) return Js::err("通道信息设置错误");
+        }
+        //不扣量,生成一个订单,只有用户的订单
+        return $this->getUserOrder($did, $account, false);
+
     }
 
     private function check_tongdao($obj)
@@ -256,17 +286,20 @@ class Neifu2 extends BaseController
         }
     }
 
-    //根据状态值,处理上一个订单
+    //根据状态值,处理上一个订单,返回一个值,他的上一个订单的时间
     private function dealOrderBySta($sta, $did)
     {
+        $order = Order::where('did', $did)->order('id', 'desc')->find();
+        if (!$order) return '';
         if ($sta == C::order_sta_not_enough || $sta == C::order_sta_fk) {
             //如果是余额不足发生了,这个设备的前一个订单要设置状态为余额不足
-            $order = Order::where('did', $did)->order('id', 'desc')->find();
             if ($order->sta == C::order_sta_init) {
                 $order->sta = C::order_sta_not_enough;
                 $order->save();
             }
         }
+        return $order->time;
+
     }
 
 
@@ -281,7 +314,7 @@ class Neifu2 extends BaseController
 //生成订单,并且返回,订单与target_url和device相关
     //这个过程中需要考虑成功的和不足的订单数量,如果成功的订单超过4单就不能再发起,
     //每成功一个定单或者不足一个订单,都到下一个金额梯度
-    private function getUserOrder($did, $aid)
+    private function getUserOrder($did, $account, $kl)
     {
         //获取当前设备3天内有几个订单
         //成功的单子数量
@@ -304,7 +337,7 @@ class Neifu2 extends BaseController
         $money = $moneys[$distinct_count];
         if (!str_ends_with($money, ".00")) $money .= '.00';
         //订单里面保存qkey,可以知道是那个客户泄露的包
-        $order = $this->create_order($this->user->id, $money, $did, $aid);
+        $order = $this->create_order($this->user->id, $money, $did, $account, $kl);
         return $order;
     }
 
@@ -325,6 +358,8 @@ class Neifu2 extends BaseController
     {
 
         $order1->uid = 1;
+        $order1->sta = 0;
+        //其他的都是一样的,因为这个本身就是扣量订单,账号信息就是用的admin的,user只是生成一个假订单而已
         unset($order1['id']);
         return Order::create($order1->toArray());
     }

@@ -12,13 +12,14 @@ class D
 {
     public static function getDate(int $day)
     {
-        return date('Y-m-d', strtotime($day . ' days'));
+        return date('Y-m-d 00:00:00', strtotime($day . ' days'));
     }
 
     public static function getDateMinute(int $minute)
     {
-        return date('Y-m-d H:i', strtotime($minute . ' minute'));
+        return date('Y-m-d H:i:00', strtotime($minute . ' minute'));
     }
+
 
     public static function getDateSecond(int $second)
     {
