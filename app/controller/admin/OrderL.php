@@ -57,22 +57,22 @@ class OrderL extends BaseL
         //统计今天成功总额,昨天总成功额,所有总成功额,
         $day0 = Order::where('uid', $this->user->id)
             ->whereDay('time')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day1 = Order::where('uid', $this->user->id)
             ->whereDay('time', 'yesterday')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day2 = Order::where('uid', $this->user->id)
             ->whereDay('time', D::getDate(-2))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day3 = Order::where('uid', $this->user->id)
             ->whereDay('time', D::getDate(-3))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $all = Order::where('uid', $this->user->id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         return Js::suc([
             'day0' => $day0,
@@ -97,36 +97,36 @@ class OrderL extends BaseL
     {
         //统计今天成功总额,昨天总成功额,所有总成功额,
         $day0 = Order::whereDay('time')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day1 = Order::whereDay('time', 'yesterday')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day2 = Order::whereDay('time', D::getDate(-2))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day3 = Order::whereDay('time', D::getDate(-3))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $kl0 = Order::whereDay('time')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
-            ->whereLike('type', '扣量%')
+            ->where('sta', 1)
+            ->where('uid', 1)
             ->sum('money');
         $kl1 = Order::whereDay('time', 'yesterday')
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
-            ->whereLike('type', '扣量%')
+            ->where('sta', 1)
+            ->where('uid', 1)
             ->sum('money');
         $kl2 = Order::whereDay('time', D::getDate(-2))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
-            ->whereLike('type', '扣量%')
+            ->where('sta', 1)
+            ->where('uid', 1)
             ->sum('money');
         $kl3 = Order::whereDay('time', D::getDate(-3))
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
-            ->whereLike('type', '扣量%')
+            ->where('sta', 1)
+            ->where('uid', 1)
             ->sum('money');
-        $all = Order::where('sta', \app\controller\index\OrderL::$sta_zfcg)
+        $all = Order::where('sta', 1)
             ->sum('money');
-        $kl_all = Order::where('sta', \app\controller\index\OrderL::$sta_zfcg)
+        $kl_all = Order::where('sta', 1)
             ->whereLike('type', '扣量%')
             ->sum('money');
         $change0 = Change::whereDay('time')

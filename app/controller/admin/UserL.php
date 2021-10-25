@@ -77,15 +77,15 @@ class UserL extends BaseL
         if ($this->user->type != 1) return Js::err('没有权限');
         $day0 = Order::whereDay('time')
             ->where('uid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day1 = Order::whereDay('time', 'yesterday')
             ->where('uid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day2 = Order::whereDay('time', D::getDate(-2))
             ->where('uid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         return Js::suc(['num_0' => $day0, 'num_1' => $day1, 'num_2' => $day2]);
     }

@@ -45,17 +45,17 @@ class AccountL extends BaseL
         $day0 = Order::where('uid', $this->user->id)
             ->whereDay('time')
             ->where('aid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day1 = Order::where('uid', $this->user->id)
             ->whereDay('time', 'yesterday')
             ->where('aid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         $day2 = Order::where('uid', $this->user->id)
             ->whereDay('time', D::getDate(-2))
             ->where('aid', $id)
-            ->where('sta', \app\controller\index\OrderL::$sta_zfcg)
+            ->where('sta', 1)
             ->sum('money');
         return Js::suc(['num_0' => $day0, 'num_1' => $day1, 'num_2' => $day2]);
     }
