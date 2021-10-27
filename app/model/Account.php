@@ -14,10 +14,11 @@ class Account extends Model
 
     public static function getAccount_canUse($uid)
     {
-        $account = Account::
-        whereColumn('num', '<', 'max')
+        $account = Account::withoutField('e3,e1,e4')
+            ->whereColumn('num', '<', 'max')
             ->where('uid', $uid)
             ->where('sta', 1)
+            ->where('e2', '<=', 5)//账号异常5次就不再收款
             ->order('time', 'asc')
             ->find();
 

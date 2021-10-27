@@ -27,10 +27,15 @@ class Sta extends BaseController
         $order = Order::
         field('id,trade_no,note,sta,aid,cid,uid,money')
             ->where('sta', 0)
-            ->whereTime('finish_time', '<', D::getDateMinute(-1))
+            ->whereTime('finish_time', '<', D::getDateSecondAgo(-45))
             ->order('finish_time','asc')
             ->find();
         if (!$order) return '没有需要检测的订单';
+        if(!$order->trade_no) {
+            $order->sta = 3;
+            $order->save();
+            return '用户取消支付,id:'.$order->id;
+        }
         switch ($order->cid) {
             case 8:
                 return Xigua::sta($order);

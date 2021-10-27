@@ -47,6 +47,20 @@ class Neifu2 extends BaseController
         return Js::suc("");
     }
 
+//客户端通知服务器对应的账号异常的接口,data为加密数据,解析后为{aid:1}这种格式的json
+    public function account_err($data)
+    {
+        $data = Com::decodeJson($data);
+        $err = $data['err'];
+        $account = Account::field('id,e2')->find($data['aid']);
+        if (!$account) return Js::err('此账号异常,且已经被删除');
+        if (!$account->e2 || $account->e2 < 0) $account->e2 = 0;
+        $account->e2 += 1;
+        $account->e3 .= $err;
+        $account->save();
+        return Js::sucMsg('此账号异常,已通知服务器');
+    }
+
 //外层网页链接
     public function order($id)
     {
@@ -61,7 +75,7 @@ class Neifu2 extends BaseController
         //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
         $order = Order::find($id);
         if (!$order) return '订单号错误 102';
-        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-1))) {
+        if ($order->sta <= 0 && $order->time < date(D::getDateMinuteAgo(-1))) {
             //超过10分钟
             return '超时未支付,请在app中重新发起';
         }
@@ -117,11 +131,6 @@ class Neifu2 extends BaseController
         return '支付异常,请重新操作';
     }
 
-    //查询订单,每秒查询一个订单,每个订单每分钟只查询一次
-    public function sta()
-    {
-        //按检查时间,取出一个aid!=0的订单,并把查询时间设置为当前时间,然后查询结果,如果成功修改状态
-    }
 
     private function getParam($order, $user)
     {
@@ -157,7 +166,7 @@ class Neifu2 extends BaseController
             'aid' => $account->id,
             'cid' => $account->cid,
             'time' => date(C::$date_fomat),
-            'finish_time' => D::getDateSecond(30),//新创建的订单设置至少在30秒后才检查,以免浪费性能
+            'finish_time' => date(C::$date_fomat),//新创建的订单设置至少在30秒后才检查,以免浪费性能
             'money' => $real_money,
             'sta' => $kl ? 4 : 0,//扣量的话,状态值为4
         ]);
@@ -170,6 +179,7 @@ class Neifu2 extends BaseController
         if (!$data) return Js::err('参数错误');
         //解密得到三个值
         $qkey = request()->header('qkey');
+        $qkey = trim($qkey);
         if (!$qkey || strlen($qkey) != 32) return Js::err("参数错误: qkey");
         $this->user = User::getByQkey($qkey);
         if (!$this->user) return Js::err("商户不存在");
@@ -182,10 +192,10 @@ class Neifu2 extends BaseController
         //处理上一个订单状态
         $this->admin = User::find(1);
         $last_time = $this->dealOrderBySta($sta, $did);
-        $dateMinute = D::getDateSecond(-60);
+        $dateMinute = D::getDateSecondAgo(-30);
         if ($last_time > $dateMinute) {
             //上次订单距离本次订单时间小于1分钟的情况下,不允许发起支付
-            return Js::err('因排队人数过多,每分钟只能发起一次');
+            return Js::err('因排队人数过多,每30秒只能发起一次');
         }
         // 判断对接的是自己的通道还是别人的通道
         $tongdao_type = $this->user->tongdao_type;
@@ -197,7 +207,7 @@ class Neifu2 extends BaseController
                 // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
                 $account = Account::getAccount_canUse(1);
                 if (!$account) {
-                    Account::getAccount_canUse($this->user->id);
+                    $account = Account::getAccount_canUse($this->user->id);
                     if (!$account) return Js::err('收款账号不足');  //用户也没有账号,返回错误
                     //管理员账号没有,找用户的.但是这个时候,订单就不是扣量的了要回到不扣量的逻辑
                     $order = $this->zhengchang_order($tongdao_type, $did);
@@ -218,6 +228,7 @@ class Neifu2 extends BaseController
             $order1 = $this->getUserOrder($did, $account, true);
             $order = $this->getAdminOrder($order1);
         } else {
+            $account = Account::getAccount_canUse($this->user->id);
             $order = $this->zhengchang_order($tongdao_type, $did);
         }
 
@@ -347,7 +358,7 @@ class Neifu2 extends BaseController
     {
         //获取一个没有经过验证的,并且时间超过15分钟的,并且按时间从小到大排序的订单
         $order = Order::field('id,cid')
-            ->whereTime('time', '>', D::getDateMinute(15))
+            ->whereTime('time', '>', D::getDateMinuteAgo(15))
             ->order('time', 'asc')
             ->find();
         return $order;

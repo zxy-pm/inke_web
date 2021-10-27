@@ -301,7 +301,7 @@ class Neifu1 extends BaseController
     {
         //获取一个没有经过验证的,并且时间超过15分钟的,并且按时间从小到大排序的订单
         $order = Order::field('id,cid')
-            ->whereTime('time', '>', D::getDateMinute(15))
+            ->whereTime('time', '>', D::getDateMinuteAgo(15))
             ->order('time', 'asc')
             ->find();
         return $order;

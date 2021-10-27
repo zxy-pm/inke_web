@@ -32,7 +32,7 @@ class Com extends BaseController
             if (!$device) {
                 $device = $this->newDevice();
             } else {
-                $device->end_time = D::getDateMinute(5);
+                $device->end_time = D::getDateMinuteAgo(5);
                 $device->save();
             }
         }
@@ -49,13 +49,13 @@ class Com extends BaseController
 
     private function newDevice()
     {
-        return Device::create(['time' => \date(C::$date_fomat), 'end_time' => D::getDateMinute(5)]);
+        return Device::create(['time' => \date(C::$date_fomat), 'end_time' => D::getDateMinuteAgo(5)]);
 
     }
 
     public function t()
     {
-        return D::getDateMinute(5);
+        return D::getDateMinuteAgo(5);
     }
 
     public static function diedai($s)
@@ -181,7 +181,7 @@ class Com extends BaseController
         $time2 = D::getDate($day + 1);
         $user = User::field('id,last_login')->where('id', $id)->where('name', $name)->where('last_login', '<', date(C::$date_fomat))->find();
         if (!$user) return '用户不存在';
-        if ($user->last_login > D::getDateSecond(-10)) return '10秒之内只能查询一次';
+        if ($user->last_login > D::getDateSecondAgo(-10)) return '10秒之内只能查询一次';
         $sql = "SELECT colect1.t,COUNT(colect1.t) AS c FROM
 (SELECT id,HOUR(time) t FROM `order` where uid = $id and time between '$time1' and '$time2') AS colect1
 GROUP BY colect1.t";

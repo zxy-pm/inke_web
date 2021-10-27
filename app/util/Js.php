@@ -14,6 +14,9 @@ class Js
     public static function suc($data = [], $msg = 'ok', $code = 0, $count = 0)
     {
         return self::js($msg, $code, $data, $count);
+    } public static function sucMsg( $msg = 'ok',$data = [], $code = 0, $count = 0)
+    {
+        return self::js($msg, $code, $data, $count);
     }
 
     public static function err($msg = '请求错误', $code = 1, $data = null, $count = 0)

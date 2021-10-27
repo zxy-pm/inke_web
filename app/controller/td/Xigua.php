@@ -4,6 +4,7 @@
 namespace app\controller\td;
 
 
+use app\model\Account;
 use app\model\User;
 use app\util\C;
 use app\util\D;
@@ -30,15 +31,26 @@ class Xigua
             //交易成功了
             $order['sta'] = 1;
             $user = User::field('id,money,fee')->find($order->uid);
-            if($user){
-                $user->money -= $order->money*$user->fee;//用户余额扣减
+            if ($user) {
+                $user->money -= $order->money * $user->fee;//用户余额扣减
                 $user->save();
+            }
+            //找到对应的账号,账号收款总数增加上去
+            $account = Account::find($order->aid);
+            if($account){
+                $account->money +=$order->money;
+                $account->save();
             }
             $order->save();
             return '支付成功,id:' . $order->id;
-        } else {
-            dump($res);
+        } elseif ($res['code'] == 'CA0000') {
+            $order->save();
+            return '等待支付中...,id:' . $order->id;
+        }else{
+            $order->save();
+            return '状态异常,id:'.$order->id.'  '.json_encode($res);
         }
+
     }
 
 }

@@ -32,7 +32,7 @@ class Neifu extends BaseController
         //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
         $order = Order::find($id);
         if (!$order) return '订单号错误 102';
-        if ($order->sta <= 0 && $order->time < date(D::getDateMinute(-1))) {
+        if ($order->sta <= 0 && $order->time < date(D::getDateMinuteAgo(-1))) {
             //超过10分钟
             return '超时未支付,请在app中重新发起';
         }
