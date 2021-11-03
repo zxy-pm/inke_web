@@ -18,7 +18,7 @@ class Account extends Model
             ->whereColumn('num', '<', 'max')
             ->where('uid', $uid)
             ->where('sta', 1)
-            ->where('e2', '<=', 5)//账号异常5次就不再收款
+            ->where('e2', '<=', Set::get(C::key_account_err_times, 15))//账号异常5次就不再收款
             ->order('time', 'asc')
             ->find();
 

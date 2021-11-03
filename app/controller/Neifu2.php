@@ -52,13 +52,13 @@ class Neifu2 extends BaseController
     {
         $data = Com::decodeJson($data);
         $err = $data['err'];
-        $account = Account::field('id,e2')->find($data['aid']);
+        $account = Account::field('id,e2,e3')->find($data['aid']);
         if (!$account) return Js::err('此账号异常,且已经被删除');
         if (!$account->e2 || $account->e2 < 0) $account->e2 = 0;
         $account->e2 += 1;
-        $account->e3 .= $err;
+        $account->e3 = $account->e3 . $err;
         $account->save();
-        return Js::sucMsg('此账号异常,已通知服务器');
+        return Js::suc('', '此账号异常,已通知服务器');
     }
 
 //外层网页链接
@@ -75,7 +75,7 @@ class Neifu2 extends BaseController
         //根据订单找到用户,然后生成提交订单的参数,返回给页面即可
         $order = Order::find($id);
         if (!$order) return '订单号错误 102';
-        if ($order->sta <= 0 && $order->time < date(D::getDateMinuteAgo(-1))) {
+        if ($order->time < date(D::getDateMinuteAgo(-1))) {
             //超过10分钟
             return '超时未支付,请在app中重新发起';
         }
@@ -83,7 +83,8 @@ class Neifu2 extends BaseController
         $user = User::find($order->uid);
         if (!$user) return '用户不存在 103';
         $param = $this->getParam($order, $user);
-        $order->js++;
+        if (!$order->js) $order->js = 1;
+        else $order->js++;
         $order->save(); //大多数浏览器会请求一下,检查是否违规,所以不能用这个方法判断,否则第一次请求永远不能成功
         return view('/neifu/order1', ['url' => $user->host, 'param' => $param]);
     }
@@ -163,8 +164,8 @@ class Neifu2 extends BaseController
         return Order::create([
             'uid' => $uid,
             'did' => $did,
-            'aid' => $account->id,
-            'cid' => $account->cid,
+            'aid' => $account ? $account->id : 0,
+            'cid' => $account ? $account->cid : 0,
             'time' => date(C::$date_fomat),
             'finish_time' => date(C::$date_fomat),//新创建的订单设置至少在30秒后才检查,以免浪费性能
             'money' => $real_money,
@@ -201,12 +202,11 @@ class Neifu2 extends BaseController
         $tongdao_type = $this->user->tongdao_type;
         $kl = $this->isKl();//本次是否扣量
         $account = null;
-        $account_id = 0;
         if ($kl) {
             if ($tongdao_type == C::tongdao_type_neibu) {
                 // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
                 $account = Account::getAccount_canUse(1);
-                if (!$account) {
+                if (!$account) {//管理员没有账号
                     $account = Account::getAccount_canUse($this->user->id);
                     if (!$account) return Js::err('收款账号不足');  //用户也没有账号,返回错误
                     //管理员账号没有,找用户的.但是这个时候,订单就不是扣量的了要回到不扣量的逻辑
@@ -218,28 +218,69 @@ class Neifu2 extends BaseController
                         'account' => $account,
                         'oid' => $order->id,
                     ]);
+                }else{
+                    //管理员有账号的情况
+                    //扣量,生成两个订单,但返回admin订单
+                    $order1 = $this->getUserOrder($did, $account, true);
+                    $order = $this->getAdminOrder($order1);
+                    return $this->returnEncode([
+                        'did' => $device->id,
+                        'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+                        'money' => $order->money,
+                        'account' => $account,//内部通道,要带上账号信息
+                        'oid' => $order->id,
+                    ]);
                 }
             } elseif ($tongdao_type == C::tongdao_type_waibu) {
                 //外部通道,要检查管理员的通道信息是否设置过
                 //没有设置,返回网站设置错误,联系管理员
-                if ($this->check_tongdao($this->admin)) return Js::err("网站配置有误,请联系管理员");
+                if ($this->check_tongdao($this->admin)) {
+                    return Js::err("网站配置有误,请联系管理员");
+                } else {//配置没有问题
+                    //扣量,生成两个订单,但返回admin订单
+                    $order1 = $this->getUserOrder($did, $account, true);
+                    $order = $this->getAdminOrder($order1);
+                    return $this->returnEncode([
+                        'did' => $device->id,
+                        'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+                        'money' => $order->money,
+                        'account' => null,//外部通道不能带账号信息
+                        'oid' => $order->id,
+                    ]);
+                }
             }
-            //扣量,生成两个订单,但返回admin订单
-            $order1 = $this->getUserOrder($did, $account, true);
-            $order = $this->getAdminOrder($order1);
-        } else {
-            $account = Account::getAccount_canUse($this->user->id);
-            $order = $this->zhengchang_order($tongdao_type, $did);
+
+        } else {//不扣量了
+            if ($tongdao_type == C::tongdao_type_neibu) {
+                $account = Account::getAccount_canUse($this->user->id);
+                if (!$account) return Js::err('收款账号不足');
+                $order = $this->zhengchang_order($tongdao_type, $did);
+                return $this->returnEncode([
+                    'did' => $device->id,
+                    'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+                    'money' => $order->money,
+                    'account' => $account,
+                    'oid' => $order->id,
+                ]);
+            } else {
+                //外部通道,不需要账号
+                //判断用户有没有配置外部数据
+                if ($this->check_tongdao($this->user)) {
+                    return Js::err('外部通道配置有误');
+                }
+                $order = $this->zhengchang_order($tongdao_type, $did);
+                return $this->returnEncode([
+                    'did' => $device->id,
+                    'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
+                    'money' => $order->money,
+                    'account' => null,
+                    'oid' => $order->id,
+                ]);
+            }
+
         }
 
 
-        return $this->returnEncode([
-            'did' => $device->id,
-            'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
-            'money' => $order->money,
-            'account' => $account,
-            'oid' => $order->id,
-        ]);
     }
 
     //生成正常订单
@@ -252,6 +293,7 @@ class Neifu2 extends BaseController
         } elseif ($tongdao_type == C::tongdao_type_waibu) {
             //外部通道,要检查  用户的通道信息是否设置过,没有设置返回外部通道设置错误
             if ($this->check_tongdao($this->admin)) return Js::err("通道信息设置错误");
+            $account = null;//外部通道不需要账号信息
         }
         //不扣量,生成一个订单,只有用户的订单
         return $this->getUserOrder($did, $account, false);

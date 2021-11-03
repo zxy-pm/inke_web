@@ -14,6 +14,7 @@ class C
     const key_kl = 'key-kl';
     const key_kl_fee = 'key-kl-fee';
     const key_kl_fee1 = 'key-kl_fee1';
+    const key_account_err_times = 'key-account_err_times';
     const key_tongdao_type = 'key-tongdao_type';
     const key_kl_link = 'key-kl_link';
     const key_default_money = 'key-default-money';

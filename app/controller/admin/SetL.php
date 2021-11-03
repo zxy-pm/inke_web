@@ -18,6 +18,7 @@ class SetL extends BaseL
             'notice' => Set::get(C::key_notice),
             'kl' => Set::get(C::key_kl),
             'kl_fee' => Set::get(C::key_kl_fee),
+            'account_err_times' => Set::get(C::key_account_err_times,15),
             'kl_fee1' => Set::get(C::key_kl_fee1),
             'kl_link' => Set::get(C::key_kl_link),
         ]);

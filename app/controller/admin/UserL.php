@@ -68,13 +68,13 @@ class UserL extends BaseL
 
     public function users1()
     {
-        if ($this->user->type != 1) return Js::err('没有权限');
+        if ($this->user->type == 0) return Js::err('没有权限');
         return Js::suc(User::field('id,name')->order('last_login', 'desc')->select());
     }
 
     public function user_sta($id)
     {
-        if ($this->user->type != 1) return Js::err('没有权限');
+        if ($this->user->type == 0) return Js::err('没有权限');
         $day0 = Order::whereDay('time')
             ->where('uid', $id)
             ->where('sta', 1)
@@ -142,7 +142,7 @@ class UserL extends BaseL
     }
 
     //用户自己的信息(通道id,通道key)
-    public function user_ch($id, $key, $moneys, $host,$tongdao_type)
+    public function user_ch($id, $key, $moneys, $host, $tongdao_type)
     {
         //不是指定的参数直接返回错误
         $this->user->channel_id = $id;
@@ -155,12 +155,13 @@ class UserL extends BaseL
         return Js::suc();
     }
 
-    public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link)
+    public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link, $account_err_times)
     {
         if ($this->user->type != 1) return Js::err('失败');
         Set::put(C::key_kl, $kl);
         Set::put(C::key_kl_fee, $kl_fee);
         Set::put(C::key_kl_fee1, $kl_fee1);
+        Set::put(C::key_account_err_times, $account_err_times);
         Set::put(C::key_kl_link, $kl_link);
         return Js::suc();
     }

@@ -198,9 +198,9 @@ class Admin extends BaseController
         return UserL::create($this->user)->user_ch($id, $key, $moneys, $host,$tongdao_type);
     }
 
-    public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link)
+    public function save_kl($kl, $kl_fee, $kl_fee1, $kl_link,$account_err_times)
     {
-        return UserL::create($this->user)->save_kl($kl, $kl_fee, $kl_fee1, $kl_link);
+        return UserL::create($this->user)->save_kl($kl, $kl_fee, $kl_fee1, $kl_link,$account_err_times);
     }
 
 }

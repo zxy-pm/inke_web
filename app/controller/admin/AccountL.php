@@ -98,7 +98,7 @@ class AccountL extends BaseL
             //查找当前用户是否存在该通道的账号,存在的话找到她的金额,新建的条目也要用同样的金额,不存在的话金额默认为空,同时提醒他设置金额
             $account1 = Account::where('uid', $this->user->id)->where('cid', $cid)->order('id', 'desc')->find();
             if ($account1) $money1 = $account1->money;
-            else $money1 = '';
+            else $money1 = 0;
             //对应的channel是否存在
             if (Channel::field('id')->find($cid)) {
                 //当前备注是否存在,同一个通道下,name必须唯一
