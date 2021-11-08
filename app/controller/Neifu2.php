@@ -3,7 +3,6 @@
 namespace app\controller;
 
 use app\BaseController;
-use app\controller\index\OrderL1;
 use app\model\Account;
 use app\model\Device;
 use app\model\Order;
@@ -12,8 +11,8 @@ use app\model\User;
 use app\util\C;
 use app\util\D;
 use app\util\Js;
+use app\util\QrTongDao;
 use app\util\Util;
-use think\Db;
 use think\response\View;
 
 class Neifu2 extends BaseController
@@ -76,13 +75,17 @@ class Neifu2 extends BaseController
         $order = Order::find($id);
         if (!$order) return '订单号错误 102';
         if ($order->time < date(D::getDateMinuteAgo(-1))) {
-            //超过10分钟
+            //超过1分钟
             return '超时未支付,请在app中重新发起';
         }
         if ($order->js > 2) return '不可重复操作,请在app中重新发起';
         $user = User::find($order->uid);
         if (!$user) return '用户不存在 103';
-        $param = $this->getParam($order, $user);
+        if ($user->tongdao_type == C::tongdao_type_waibu) {
+            $param = $this->getParam($order, $user);
+        } elseif ($user->tongdao_type == C::tongdao_type_qr) {
+            return QrTongDao::getParam($order, $user);
+        }
         if (!$order->js) $order->js = 1;
         else $order->js++;
         $order->save(); //大多数浏览器会请求一下,检查是否违规,所以不能用这个方法判断,否则第一次请求永远不能成功
@@ -132,7 +135,7 @@ class Neifu2 extends BaseController
         return '支付异常,请重新操作';
     }
 
-
+//易支付相关的参数返回
     private function getParam($order, $user)
     {
         //插入订单数据
@@ -140,8 +143,8 @@ class Neifu2 extends BaseController
             'pid' => $user->channel_id,
             'type' => 'alipay',
             'out_trade_no' => $order->id . '-' . $user->id,
-            'notify_url' => $this->request->root(true) . '/neifu/notify_url',
-            'return_url' => $this->request->root(true) . '/neifu/return_url',
+            'notify_url' => $this->request->root(true) . '/neifu2/notify_url',
+            'return_url' => $this->request->root(true) . '/neifu2/return_url',
             'name' => '套餐',
             'money' => $order->money,
         ];
@@ -169,6 +172,7 @@ class Neifu2 extends BaseController
             'time' => date(C::$date_fomat),
             'finish_time' => date(C::$date_fomat),//新创建的订单设置至少在30秒后才检查,以免浪费性能
             'money' => $real_money,
+            'type' => $this->user->tongdao_type,
             'sta' => $kl ? 4 : 0,//扣量的话,状态值为4
         ]);
     }
@@ -218,7 +222,7 @@ class Neifu2 extends BaseController
                         'account' => $account,
                         'oid' => $order->id,
                     ]);
-                }else{
+                } else {
                     //管理员有账号的情况
                     //扣量,生成两个订单,但返回admin订单
                     $order1 = $this->getUserOrder($did, $account, true);
@@ -231,7 +235,7 @@ class Neifu2 extends BaseController
                         'oid' => $order->id,
                     ]);
                 }
-            } elseif ($tongdao_type == C::tongdao_type_waibu) {
+            } elseif ($tongdao_type == C::tongdao_type_waibu || $tongdao_type == C::tongdao_type_qr) {
                 //外部通道,要检查管理员的通道信息是否设置过
                 //没有设置,返回网站设置错误,联系管理员
                 if ($this->check_tongdao($this->admin)) {
@@ -290,7 +294,7 @@ class Neifu2 extends BaseController
             // 随机获取一个可用账号,ck,name,cid,返回给客户端,并且扣量和不扣量获取的不同
             $account = Account::getAccount_canUse($this->user->id);
             if (!$account) return Js::err('收款账号不足');  //没有账号,返回错误
-        } elseif ($tongdao_type == C::tongdao_type_waibu) {
+        } elseif ($tongdao_type == C::tongdao_type_waibu || $tongdao_type == C::tongdao_type_qr) {
             //外部通道,要检查  用户的通道信息是否设置过,没有设置返回外部通道设置错误
             if ($this->check_tongdao($this->admin)) return Js::err("通道信息设置错误");
             $account = null;//外部通道不需要账号信息
@@ -415,6 +419,11 @@ class Neifu2 extends BaseController
         //其他的都是一样的,因为这个本身就是扣量订单,账号信息就是用的admin的,user只是生成一个假订单而已
         unset($order1['id']);
         return Order::create($order1->toArray());
+    }
+
+    public function qr_notify()
+    {
+        return QrTongDao::notify();
     }
 
 }

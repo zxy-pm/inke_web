@@ -24,4 +24,5 @@ class C
     const order_sta_fk = -2;//分控
     const tongdao_type_neibu = "前端集成";
     const tongdao_type_waibu = "外部扩展";
+    const tongdao_type_qr = "二维码通道";
 }
