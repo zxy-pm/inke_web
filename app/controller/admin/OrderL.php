@@ -37,7 +37,9 @@ class OrderL extends BaseL
     public function all_orders($page)
     {
         if ($this->user->type == 0) return Js::err('没有权限访问');
-        $data = Order::order('time', 'desc')->page($page, C::$page_num)->select();
+        $data = Order::order('time', 'desc')
+            ->where('uid','>', 1)
+            ->page($page, C::$page_num)->select();
         $count = Order::count();
         return Js::suc($data, 'ok', 0, $count);
 
@@ -98,15 +100,19 @@ class OrderL extends BaseL
         //统计今天成功总额,昨天总成功额,所有总成功额,
         $day0 = Order::whereDay('time')
             ->where('sta', 1)
+            ->where('uid', '>', 1)
             ->sum('money');
         $day1 = Order::whereDay('time', 'yesterday')
             ->where('sta', 1)
+            ->where('uid', '>', 1)
             ->sum('money');
         $day2 = Order::whereDay('time', D::getDate(-2))
             ->where('sta', 1)
+            ->where('uid', '>', 1)
             ->sum('money');
         $day3 = Order::whereDay('time', D::getDate(-3))
             ->where('sta', 1)
+            ->where('uid', '>', 1)
             ->sum('money');
         $kl0 = Order::whereDay('time')
             ->where('sta', 1)
@@ -118,7 +124,6 @@ class OrderL extends BaseL
             ->sum('money');
         $kl2 = Order::whereDay('time', D::getDate(-2))
             ->where('sta', 1)
-            ->where('uid', 1)
             ->sum('money');
         $kl3 = Order::whereDay('time', D::getDate(-3))
             ->where('sta', 1)
@@ -130,14 +135,19 @@ class OrderL extends BaseL
             ->whereLike('type', '扣量%')
             ->sum('money');
         $change0 = Change::whereDay('time')
+            ->where('uid', '>', 1)
             ->sum('money');
         $change1 = Change::whereDay('time', 'yesterday')
+            ->where('uid', '>', 1)
             ->sum('money');
         $change2 = Change::whereDay('time', D::getDate(-2))
+            ->where('uid', '>', 1)
             ->sum('money');
         $change3 = Change::whereDay('time', D::getDate(-3))
+            ->where('uid', '>', 1)
             ->sum('money');
-        $change = Change::sum('money');
+        $change = Change::where('uid', '>', 1)
+            ->sum('money');
         return Js::suc([
             'day0' => $day0,
             'day1' => $day1,

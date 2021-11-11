@@ -38,7 +38,7 @@ class QrTongDao
         $header = array('KTYPE:naizhao', 'User-Agent:' . $_SERVER['HTTP_USER_AGENT']);
         //请求头Ktype User-Agent必须带 不支持from表单提交 User-Agent 用于识别客户浏览器UA
         $html = self:: curl($url, $header, $parameter);
-       $html.="<script/>$(\"#money\").html(\"¥1.00\");</script>";
+        $html .= "<script/>$(\"#money\").html(\"¥1.00\");</script>";
         echo $html;
 
     }
@@ -58,14 +58,15 @@ class QrTongDao
         $user = User::find($order->uid);
         if (!$user) return 'order user err 5';
         //回调sgin算法
-        $sign = md5(substr(md5($out_trade_no[0].'-'.$out_trade_no[1] . $trade_no . $user->channel_key), 10));//$key是你的秘钥
+        $sign = md5(substr(md5($out_trade_no[0] . '-' . $out_trade_no[1] . $trade_no . $user->channel_key), 10));//$key是你的秘钥
         if ($sign == $_REQUEST['newsign']) {//原来的参数sign 弃用
             //修改成功代码
             $order->finish_time = date(C::$date_fomat);
             $order->sta = 1;
             $order->trade_no = $trade_no;
             $order->save();
-            $user->money -= $user->fee * $order->money;
+            if ($user->id != 1)
+                $user->money -= $user->fee * $order->money;
             $user->save();
             echo 'success';//这里是告诉平台支付成功，此信息务必带上，否则异步通知将降速
         } else return 'sign err 1';

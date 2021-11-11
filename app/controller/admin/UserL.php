@@ -57,19 +57,21 @@ class UserL extends BaseL
         if ($this->user->type != 1) return Js::err('没有权限');
         return Js::suc(
             [
-                'users' => User::order('last_login', 'desc')->select(),
-                'ye' => round(User::sum('money'), 2)
+                'users' => User::order('last_login', 'desc')->where('id', '>', 1)
+                    ->select(),
+                'ye' => round(User::where('id', '>', 1)->sum('money'), 2)
             ],
             'ok',
             0,
-            User::count('id')
+            User::count('id')-1
         );
     }
 
     public function users1()
     {
         if ($this->user->type == 0) return Js::err('没有权限');
-        return Js::suc(User::field('id,name')->order('last_login', 'desc')->select());
+        return Js::suc(User::field('id,name')->where('id', '>', 1)
+            ->order('last_login', 'desc')->select());
     }
 
     public function user_sta($id)
