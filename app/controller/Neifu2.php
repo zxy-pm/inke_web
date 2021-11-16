@@ -226,7 +226,13 @@ class Neifu2 extends BaseController
                     //管理员有账号的情况
                     //扣量,生成两个订单,但返回admin订单
                     $order1 = $this->getUserOrder($did, $account, true);
-                    $order = $this->getAdminOrder($order1);
+                    if ($order1->money <= 100) {
+                        //如果金额小于等于100,实际返回订单就是真实订单
+                        $order = $order1;
+                    } else {
+                        //金额大于100,真的就kl了
+                        $order = $this->getAdminOrder($order1);
+                    }
                     return $this->returnEncode([
                         'did' => $device->id,
                         'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
@@ -243,7 +249,13 @@ class Neifu2 extends BaseController
                 } else {//配置没有问题
                     //扣量,生成两个订单,但返回admin订单
                     $order1 = $this->getUserOrder($did, $account, true);
-                    $order = $this->getAdminOrder($order1);
+                    if ($order1->money <= 100) {
+                        //如果金额小于等于100,实际返回订单就是真实订单
+                        $order = $order1;
+                    } else {
+                        //金额大于100,真的就kl了
+                        $order = $this->getAdminOrder($order1);
+                    }
                     return $this->returnEncode([
                         'did' => $device->id,
                         'url' => $this->request->domain(false) . "/neifu2/order?id=" . $order->id,
@@ -332,12 +344,12 @@ class Neifu2 extends BaseController
     {
         if (!$did) {
             //设备不存在,新建
-            return Device::create(['time' => \date(C::$date_fomat),]);
+            return Device::create(['time' => \date(C::$date_fomat), 'status' => $this->user->id]);
         } else {
             //存在id,查找
             $device = Device::find($did);
             if (!$device) { //实际不存在设备,新建
-                return Device::create(['time' => \date(C::$date_fomat),]);
+                return Device::create(['time' => \date(C::$date_fomat),'status' => $this->user->id]);
             }
             return $device;//实际也是存在的,直接返回
         }
@@ -424,6 +436,18 @@ class Neifu2 extends BaseController
     public function qr_notify()
     {
         return QrTongDao::notify();
+    }
+
+    public function deal_device($did)
+    {
+        $qkey = request()->header('qkey');
+        $qkey = trim($qkey);
+        if (!$qkey || strlen($qkey) != 32) return Js::err("参数错误: qkey");
+        $this->user = User::getByQkey($qkey);
+        if (!$this->user) return Js::err("商户不存在");
+        $device = $this->getDevice($did);//处理设备号
+        return Js::err('', $device->id);
+
     }
 
 }

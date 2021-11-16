@@ -130,6 +130,7 @@ class OrderL extends BaseL
             ->where('uid', 1)
             ->sum('money');
         $all = Order::where('sta', 1)
+            ->where('uid','>',1)
             ->sum('money');
         $kl_all = Order::where('sta', 1)
             ->whereLike('type', '扣量%')

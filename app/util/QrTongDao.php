@@ -65,9 +65,11 @@ class QrTongDao
             $order->sta = 1;
             $order->trade_no = $trade_no;
             $order->save();
-            if ($user->id != 1)
+            if ($user->id != 1) {
                 $user->money -= $user->fee * $order->money;
-            $user->save();
+                $user->save();
+            }
+
             echo 'success';//这里是告诉平台支付成功，此信息务必带上，否则异步通知将降速
         } else return 'sign err 1';
     }

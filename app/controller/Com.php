@@ -125,8 +125,10 @@ class Com extends BaseController
         $s = str_replace("=", "", $s);
         return $s;
     }
+
     //加密json
-    public static function encodeJson($json){
+    public static function encodeJson($json)
+    {
         return self::encode(json_encode($json));
     }
 
@@ -147,6 +149,7 @@ class Com extends BaseController
             return null;
         }
     }
+
     public static function decodeJson(string $s)
     {
         $s = substr($s, 3);
@@ -155,7 +158,7 @@ class Com extends BaseController
         $s = base64_decode($s);
         $s = substr($s, 3);
         $s = base64_decode($s);
-       return json_decode($s,true);
+        return json_decode($s, true);
     }  //解密
 
     public static function decode1(string $s, int $count)
@@ -172,10 +175,9 @@ class Com extends BaseController
         }
     }
 
-    //统计注册用户
+    //统计注册用户,按照订单统计
     public function sta($id, $name, $day = 0)
     {
-        //todo 限制请求频率,2分钟内只允许请求1次
 
         $time1 = D::getDate($day);
         $time2 = D::getDate($day + 1);
@@ -204,6 +206,21 @@ GROUP BY colect1.t";//成功的sql
         $user->last_login = date(C::$date_fomat);
         $user->save();
         return view('', ['list' => $arr, 'id' => $id, 'name' => $name, 'day' => $day]);
+    }
+
+    //统计注册用户,按照实际用户统计
+    public function sta1($id, $name, $day = 0)
+    {
+        $user = User::field('id,last_login')->where('id', $id)->where('name', $name)->where('last_login', '<', date(C::$date_fomat))->find();
+        if (!$user) return '用户不存在';
+        if ($user->last_login > D::getDateSecondAgo(-15)) return '15秒之内只能查询一次';
+        $time1 = D::getDate($day);
+        $time2 = D::getDate($day + 1);
+        if ($id == 1) $count = 0;
+        else $count = Device::where('status', $id)->whereBetweenTime('time', $time1, $time2)->count();
+        $user->last_login = date(C::$date_fomat);
+        $user->save();
+        return view('', ['c' => $count, 'day' => $day, 'id' => $id, 'name' => $name]);
     }
 
     private function getNum($arr, $i)
