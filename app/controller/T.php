@@ -9,7 +9,10 @@ class T extends BaseController
 {
     public function t()
     {
-        return D::getDate(-1) < D::getDateMinuteAgo(-1)?"小于":'大于';
+        $encode = Com::encode("10023");
+        echo $encode;
+        echo '<br>';
+        echo  Com::decode($encode,1)[0];
     }
 
     public function t1()

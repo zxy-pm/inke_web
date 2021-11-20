@@ -106,6 +106,7 @@ class Neifu2 extends BaseController
             else $s .= "&$k=$v";
         }
         $id = $params['out_trade_no'];
+        $id = Com::decode($id,1)[0];
         if (!$id) return 'order id err 2';
         $id = explode('-', $id);
         if (count($id) != 2) return 'order id err 3';
@@ -138,11 +139,13 @@ class Neifu2 extends BaseController
 //易支付相关的参数返回
     private function getParam($order, $user)
     {
+        $encode_oid=$order->id;
+        $encode_oid = Com::encode($encode_oid);
         //插入订单数据
         $param = [
             'pid' => $user->channel_id,
             'type' => 'alipay',
-            'out_trade_no' => $order->id . '-' . $user->id,
+            'out_trade_no' => $encode_oid,
             'notify_url' => $this->request->root(true) . '/neifu2/notify_url',
             'return_url' => $this->request->root(true) . '/neifu2/return_url',
             'name' => '套餐',

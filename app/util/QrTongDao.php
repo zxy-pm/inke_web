@@ -2,6 +2,7 @@
 
 namespace app\util;
 //Qrtongdao 对应的支付生成和通知接受方法
+use app\controller\Com;
 use app\model\Order;
 use app\model\User;
 
@@ -13,10 +14,12 @@ class QrTongDao
 
         $paykey = $user->channel_key;
         $url = $user->host;
+        $encode_oid=$order->id;
+        $encode_oid = Com::encode($encode_oid);
         $parameter = array(
             "pid" => $user->channel_id . '',//商户ID
             "type" => "html",//支付方式 , json
-            "out_trade_no" => $order->id . '-' . $user->id,//订单号
+            "out_trade_no" => $encode_oid,//订单号
             "notify_url" => "http://" . $_SERVER['HTTP_HOST'] . "/neifu2/qr_notify",//异步地址
             "return_url" => "http://" . $_SERVER['HTTP_HOST'] . "/neifu2/return_url", //同步地址
             "name" => '套餐', //商品名
@@ -42,23 +45,23 @@ class QrTongDao
         echo $html;
 
     }
-
+//http://127.0.0.1:8000/neifu2/qr_notify?dx_ddh=10000017032603018194113567&dx_phone=xxx&dx_shijian=2021-11-20+19%3A11%3A16&id=957&mchid=104598&money=6&name=%E5%A5%97%E9%A4%90&out_trade_no=UzIMlpuVjNWQ1RXYw&trade_no=2021112019110031241&trade_status=TRADE_SUCCESS&sign=e0efcfa547d369d24903c687a0a59d42&newsign=4888df4e5ee0e237ac0f5db3029d3740&sign_type=MD5
+//上面为回调测试链接,使用的key 为 84b2ae6775f57bd34cde38b307934d63
     public static function notify()
     {
         $trade_status = $_REQUEST['trade_status'];//TRADE_SUCCESS成功
         if ($trade_status != 'TRADE_SUCCESS') return 'fail';
         $out_trade_no = $_REQUEST['out_trade_no'];//提交的订单号
+        $oid = Com::decode($out_trade_no,1)[0];
         $trade_no = $_REQUEST['trade_no'];//平台订单号
 //回调参数，out_trade_no，out_trade_no，name，money
-        if (!$out_trade_no) return 'order out_trade_no err 2';
-        $out_trade_no = explode('-', $out_trade_no);
-        if (count($out_trade_no) != 2) return 'order out_trade_no err 3';
-        $order = Order::find($out_trade_no[0]);
+        if (!$oid) return 'order out_trade_no err 2';
+        $order = Order::find($oid);
         if (!$order) return 'order err 4';
         $user = User::find($order->uid);
         if (!$user) return 'order user err 5';
         //回调sgin算法
-        $sign = md5(substr(md5($out_trade_no[0] . '-' . $out_trade_no[1] . $trade_no . $user->channel_key), 10));//$key是你的秘钥
+        $sign = md5(substr(md5($out_trade_no. $trade_no . $user->channel_key), 10));//$key是你的秘钥
         if ($sign == $_REQUEST['newsign']) {//原来的参数sign 弃用
             //修改成功代码
             $order->finish_time = date(C::$date_fomat);
